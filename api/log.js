@@ -1,0 +1,89 @@
+// Vercel Serverless Function — receives a workout and writes it to Notion.
+// Lives at:  /api/log   (because the file is api/log.js)
+// Secrets come from environment variables set in the Vercel dashboard:
+//   NOTION_TOKEN        -> your Notion integration secret (starts with "ntn_")
+//   NOTION_DATABASE_ID  -> the 32-char id of your Notion database
+//
+// Structure: ONE ROW PER SET. In Notion, group the view by Date to see each
+// session as its own block, with per-session totals in the group footer.
+//
+// Columns required in your Notion database (names must match exactly):
+//   Name        — Title (text) — auto-filled with e.g. "Back Squat — Set 1"
+//   Exercise    — Select       — auto-creates options as new exercises come in
+//   Date        — Date
+//   Set #       — Number
+//   Weight (kg) — Number
+//   Reps        — Number
+//   Volume (kg) — Number
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  const TOKEN = process.env.NOTION_TOKEN;
+  const DB = process.env.NOTION_DATABASE_ID;
+  if (!TOKEN || !DB) {
+    res.status(500).json({ error: 'Server is missing NOTION_TOKEN or NOTION_DATABASE_ID' });
+    return;
+  }
+
+  let body = req.body;
+  if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch { body = {}; }
+  }
+
+  const { date, exercises } = body || {};
+  if (!date || !Array.isArray(exercises) || exercises.length === 0) {
+    res.status(400).json({ error: 'Expected { date, exercises[] }' });
+    return;
+  }
+
+  const num = v => Number(v) || 0;
+  let created = 0;
+
+  try {
+    for (const ex of exercises) {
+      const sets = Array.isArray(ex.sets) ? ex.sets : [];
+      for (let i = 0; i < sets.length; i++) {
+        const weight = num(sets[i].weight);
+        const reps   = num(sets[i].reps);
+        const name   = ex.name || 'Exercise';
+
+        const resp = await fetch('https://api.notion.com/v1/pages', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${TOKEN}`,
+            'Notion-Version': '2022-06-28',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            parent: { database_id: DB },
+            properties: {
+              'Name':        { title:  [{ text: { content: `${name} — Set ${i + 1}` } }] },
+              'Exercise':    { select: { name } },
+              'Date':        { date:   { start: date } },
+              'Set #':       { number: i + 1 },
+              'Weight (kg)': { number: weight },
+              'Reps':        { number: reps },
+              'Volume (kg)': { number: weight * reps },
+            },
+          }),
+        });
+
+        if (!resp.ok) {
+          const detail = await resp.text();
+          console.error('Notion error', resp.status, detail);
+          res.status(502).json({ error: 'Notion rejected the request', detail, createdSoFar: created });
+          return;
+        }
+        created++;
+      }
+    }
+
+    res.status(200).json({ ok: true, created });
+  } catch (e) {
+    res.status(500).json({ error: 'Sync failed', detail: String(e) });
+  }
+}
