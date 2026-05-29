@@ -23,7 +23,6 @@ export default async function handler(req, res) {
   }
 
   const TOKEN = process.env.NOTION_TOKEN;
-  const ENV_DB = process.env.NOTION_DATABASE_ID;
   if (!TOKEN) {
     res.status(500).json({ error: 'Server is missing NOTION_TOKEN' });
     return;
@@ -40,8 +39,8 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Use the database the app sends (per person); fall back to the server default.
-  const DB = (databaseId && String(databaseId).trim()) || ENV_DB;
+  // The database is provided by the app — each person sets their own. No default.
+  const DB = databaseId && String(databaseId).trim();
   if (!DB) {
     res.status(400).json({ error: 'No Notion database set. Open the app, tap Notion sync, and add your database ID.' });
     return;
