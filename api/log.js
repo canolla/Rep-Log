@@ -33,6 +33,27 @@ export default async function handler(req, res) {
     try { body = JSON.parse(body); } catch { body = {}; }
   }
 
+  // Archive (delete) or un-archive (undo) existing rows by page id.
+  if (body && body.action === 'archive' && Array.isArray(body.pageIds)) {
+    const archived = body.archived !== false; // default true = trash it
+    try {
+      for (const id of body.pageIds) {
+        const r = await fetch('https://api.notion.com/v1/pages/' + id, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${TOKEN}`,
+            'Notion-Version': '2022-06-28',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ archived }),
+        });
+        if (!r.ok) { const detail = await r.text(); console.error('Notion archive error', r.status, detail); res.status(502).json({ error: 'Notion archive failed', detail }); return; }
+      }
+      res.status(200).json({ ok: true, archived: body.pageIds.length });
+      return;
+    } catch (e) { res.status(500).json({ error: 'Archive failed', detail: String(e) }); return; }
+  }
+
   const { date, exercises, databaseId } = body || {};
   if (!date || !Array.isArray(exercises) || exercises.length === 0) {
     res.status(400).json({ error: 'Expected { date, exercises[] }' });
@@ -48,6 +69,7 @@ export default async function handler(req, res) {
 
   const num = v => Number(v) || 0;
   let created = 0;
+  const ids = [];
 
   try {
     for (const ex of exercises) {
@@ -84,11 +106,12 @@ export default async function handler(req, res) {
           res.status(502).json({ error: 'Notion rejected the request', detail, createdSoFar: created });
           return;
         }
+        try { const d = await resp.json(); if (d && d.id) ids.push(d.id); } catch (e) {}
         created++;
       }
     }
 
-    res.status(200).json({ ok: true, created });
+    res.status(200).json({ ok: true, created, ids });
   } catch (e) {
     res.status(500).json({ error: 'Sync failed', detail: String(e) });
   }
