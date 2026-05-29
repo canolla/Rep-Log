@@ -23,9 +23,9 @@ export default async function handler(req, res) {
   }
 
   const TOKEN = process.env.NOTION_TOKEN;
-  const DB = process.env.NOTION_DATABASE_ID;
-  if (!TOKEN || !DB) {
-    res.status(500).json({ error: 'Server is missing NOTION_TOKEN or NOTION_DATABASE_ID' });
+  const ENV_DB = process.env.NOTION_DATABASE_ID;
+  if (!TOKEN) {
+    res.status(500).json({ error: 'Server is missing NOTION_TOKEN' });
     return;
   }
 
@@ -34,9 +34,16 @@ export default async function handler(req, res) {
     try { body = JSON.parse(body); } catch { body = {}; }
   }
 
-  const { date, exercises } = body || {};
+  const { date, exercises, databaseId } = body || {};
   if (!date || !Array.isArray(exercises) || exercises.length === 0) {
     res.status(400).json({ error: 'Expected { date, exercises[] }' });
+    return;
+  }
+
+  // Use the database the app sends (per person); fall back to the server default.
+  const DB = (databaseId && String(databaseId).trim()) || ENV_DB;
+  if (!DB) {
+    res.status(400).json({ error: 'No Notion database set. Open the app, tap Notion sync, and add your database ID.' });
     return;
   }
 
