@@ -276,8 +276,14 @@ async function syncSession(session) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ date: session.date, exercises: session.exercises })
     });
-    return r.ok;
-  } catch (e) { return false; }
+    if (r.ok) return { ok: true };
+    let msg = 'HTTP ' + r.status;
+    try {
+      const j = await r.json(); msg = j.error || msg;
+      if (j.detail) { try { const nd = JSON.parse(j.detail); msg = nd.message || j.detail; } catch (e) { msg = j.detail; } }
+    } catch (e) {}
+    return { ok: false, error: msg };
+  } catch (e) { return { ok: false, error: 'Could not reach /api/log (network).' }; }
 }
 
 /* ---------- Helpers ---------- */
@@ -295,7 +301,7 @@ function lastPerformance(name) {
   for (const s of sorted) { const ex = s.exercises.find(e => e.name.trim().toLowerCase() === key); if (ex) return { date: s.date, sets: ex.sets }; }
   return null;
 }
-function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(()=>t.classList.remove('show'), 2100); }
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(()=>t.classList.remove('show'), 4200); }
 function escapeHtml(s){ return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 /* ---------- Draft rendering ---------- */
@@ -424,9 +430,9 @@ function buildSessionEl(s) {
   const syncBtn = el.querySelector('[data-sync]');
   if (syncBtn) syncBtn.addEventListener('click', async e => {
     e.stopPropagation(); syncBtn.textContent = '\u2026';
-    const ok = await syncSession(s);
-    s.synced = ok; persist(); renderHistory();
-    toast(ok ? 'Synced to Notion \u2713' : 'Still couldn\u2019t reach Notion');
+    const res = await syncSession(s);
+    s.synced = res.ok; persist(); renderHistory();
+    toast(res.ok ? 'Synced to Notion ✓' : ('Notion: ' + res.error));
   });
   return el;
 }
@@ -589,9 +595,9 @@ $('save-btn').addEventListener('click', async ()=>{
   sessions.push(session); persist(); draftExercises = []; renderDraft(); renderHistory();
   toast('Workout saved 💪');
 
-  const ok = await syncSession(session);
-  session.synced = ok; persist(); renderHistory();
-  if (ok) toast('Synced to Notion ✓');
+  const res = await syncSession(session);
+  session.synced = res.ok; persist(); renderHistory();
+  toast(res.ok ? 'Synced to Notion ✓' : ('Notion: ' + res.error));
 });
 
 /* ---------- Export / Import ---------- */
