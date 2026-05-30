@@ -86,6 +86,8 @@ export default async function handler(req, res) {
             setNo: n2(p['Set #']),
             weight: n2(p['Weight (kg)']),
             reps: n2(p['Reps']),
+            mins: n2(p['Duration (min)']),
+            km: n2(p['Distance (km)']),
             tag: sel(p['Workout Type']),
           });
         });
@@ -117,8 +119,11 @@ export default async function handler(req, res) {
     for (const ex of exercises) {
       const sets = Array.isArray(ex.sets) ? ex.sets : [];
       for (let i = 0; i < sets.length; i++) {
+        const isCardio = ex.type === 'cardio';
         const weight = num(sets[i].weight);
         const reps   = num(sets[i].reps);
+        const mins   = num(sets[i].mins);
+        const km     = num(sets[i].km);
         const name   = ex.name || 'Exercise';
 
         const resp = await fetch('https://api.notion.com/v1/pages', {
@@ -137,9 +142,11 @@ export default async function handler(req, res) {
               'Exercise':    { select: { name } },
               'Date':        { date:   { start: date } },
               'Set #':       { number: i + 1 },
-              'Weight (kg)': { number: weight },
-              'Reps':        { number: reps },
-              'Volume (kg)': { number: weight * reps },
+              'Weight (kg)':    { number: isCardio ? null : weight },
+              'Reps':           { number: isCardio ? null : reps },
+              'Volume (kg)':    { number: isCardio ? null : weight * reps },
+              'Duration (min)': { number: isCardio ? mins : null },
+              'Distance (km)':  { number: (isCardio && km) ? km : null },
             },
           }),
         });
