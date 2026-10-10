@@ -13,9 +13,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .wrap{max-width:1040px;margin:0 auto;padding:0 34px}
 header{height:86px;display:flex;align-items:center;justify-content:space-between;gap:20px;border-bottom:1px solid var(--line)}
 .brand{display:flex;align-items:center;gap:12px;min-width:0}
-.mark{height:38px;width:38px;border-radius:11px;background:var(--text);color:var(--bg);font-size:22px;font-weight:720;text-align:center;white-space:nowrap;letter-spacing:-.1em;padding-right:3px;line-height:38px}
+.mark{height:38px;width:38px;border-radius:11px;background:var(--text);color:var(--bg);font-size:22px;font-weight:720;display:flex;align-items:center;justify-content:center;gap:3px;white-space:nowrap;letter-spacing:-.07em;line-height:1}
 :root[data-theme=dark] .mark{background:#686a6d;color:#fff}
-.mark span{color:var(--green)}
+.mark span{display:block;width:6px;height:6px;flex:none;margin-top:12px;border-radius:50%;background:var(--green)}
 h1{margin:0;font-size:18px;letter-spacing:-.055em;line-height:1.15;font-weight:700}
 .header-actions{display:flex;align-items:center;gap:12px}
 .view-nav{display:flex;gap:3px;padding:4px;background:var(--panel-2);border:1px solid var(--line);border-radius:11px}
@@ -176,12 +176,6 @@ input[type=text].ex-name-input{flex:1;min-width:0;width:0;border:0;box-shadow:no
 .success-sync{font-size:11px;color:var(--muted);margin-top:12px}
 .success-sync:empty{display:none}
 .success-confetti{position:absolute;inset:0;pointer-events:none;z-index:2;overflow:hidden}
-/* The new dot itself morphs; its layout footprint stays fixed at 10px. */
-@supports (clip-path:polygon(0 0,100% 0,50% 100%)){
-.goal-dot.extra.just-filled{--bolt-shape:polygon(58.00% 0.00%,44.75% 14.25%,31.50% 28.50%,18.25% 42.75%,5.00% 57.00%,14.50% 57.00%,24.00% 57.00%,33.50% 57.00%,43.00% 57.00%,39.50% 67.75%,36.00% 78.50%,32.50% 89.25%,29.00% 100.00%,45.75% 84.75%,62.50% 69.50%,79.25% 54.25%,96.00% 39.00%,86.25% 39.00%,76.50% 39.00%,66.75% 39.00%,57.00% 39.00%,57.25% 29.25%,57.50% 19.50%,57.75% 9.75%);--dot-shape:polygon(50.00% 0.00%,37.06% 1.70%,25.00% 6.70%,14.64% 14.64%,6.70% 25.00%,1.70% 37.06%,0.00% 50.00%,1.70% 62.94%,6.70% 75.00%,14.64% 85.36%,25.00% 93.30%,37.06% 98.30%,50.00% 100.00%,62.94% 98.30%,75.00% 93.30%,85.36% 85.36%,93.30% 75.00%,98.30% 62.94%,100.00% 50.00%,98.30% 37.06%,93.30% 25.00%,85.36% 14.64%,75.00% 6.70%,62.94% 1.70%);animation:goal-bolt-morph .38s cubic-bezier(.4,0,.2,1) backwards}
-@keyframes goal-bolt-morph{0%{opacity:0;transform:scale(1.25,1.9);border-radius:0;clip-path:var(--bolt-shape);background:var(--green-ink)}16%,30%{opacity:1;transform:scale(1.25,1.9);border-radius:0;clip-path:var(--bolt-shape);background:var(--green-ink)}100%{opacity:1;transform:scale(1);border-radius:50%;clip-path:var(--dot-shape);background:var(--green)}}
-}
-@media(prefers-reduced-motion:reduce){.goal-dot.extra.just-filled{animation:none!important}}
 .confetti-piece{position:absolute;width:4px;height:7px;background:var(--green-ink);border-radius:1px;animation:goal-confetti 1.1s cubic-bezier(.16,.7,.25,1) both}
 .confetti-piece:nth-child(3n){background:var(--green)}
 .confetti-piece:nth-child(3n + 1){background:var(--muted);width:3px;height:5px}

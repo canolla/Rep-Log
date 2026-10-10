@@ -19,7 +19,7 @@
 <body>
 <div class="wrap">
   <header class="fade-in">
-    <div class="brand"><div class="mark" aria-hidden="true">R<span>.</span></div><h1>Rep Log</h1></div>
+    <div class="brand"><div class="mark" aria-hidden="true">R<span></span></div><h1>Rep Log</h1></div>
     <div class="header-actions">
       <nav class="view-nav" aria-label="Main navigation">
         <button type="button" id="log-tab" class="view-tab active" aria-current="page">Workout log</button>
@@ -654,7 +654,7 @@ function renderGoalDots(element, count, target, animate = false) {
   element.replaceChildren();
   for (let i = 0; i < Math.max(target, count); i++) {
     const dot = document.createElement('span');
-    dot.className = 'goal-dot' + (i < count ? ' filled' : '') + (i >= target ? ' extra' : '') + (animate && i === count - 1 ? ' just-filled' : '');
+    dot.className = 'goal-dot' + (i < count ? ' filled' : '') + (animate && i === count - 1 ? ' just-filled' : '');
     element.appendChild(dot);
   }
   element.setAttribute('aria-label', count + ' of ' + target + ' workouts');
@@ -719,7 +719,7 @@ function showWorkoutSuccess(session) {
   $('toast').classList.remove('show');
   $('workout-success-backdrop').hidden = false;
   panel.hidden = false;
-  if (count === weeklyTarget) celebrateGoal();
+  if (count >= weeklyTarget) celebrateGoal();
   scheduleSuccessDismissal();
 }
 ['pointerdown', 'focusin'].forEach(type => document.addEventListener(type, event => {
