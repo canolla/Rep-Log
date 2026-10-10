@@ -1,0 +1,1516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Rep Log</title>
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Rep Log">
+<meta name="theme-color" content="#fafaf9">
+<link rel="apple-touch-icon" href="assets/touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+
+<link rel="icon" type="image/svg+xml" href="assets/icon.svg">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="fade-in">
+    <div class="brand"><div class="mark" aria-hidden="true">R<span>.</span></div><h1>Rep Log</h1></div>
+    <div class="header-actions">
+      <nav class="view-nav" aria-label="Main navigation">
+        <button type="button" id="log-tab" class="view-tab active" aria-current="page">Workout log</button>
+        <button type="button" id="view-toggle" class="view-tab">Progress</button>
+      </nav>
+      <button type="button" id="theme-toggle" class="theme-toggle" title="Change theme" aria-label="Switch to dark mode">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5 8.5 8.5 0 1 0 20.5 14.5Z"/></svg>
+      </button>
+    </div>
+  </header>
+  <div id="log-view">
+  <div class="statbar fade-in" style="animation-delay:.03s">
+    <div class="stat"><div class="num" id="stat-sessions">0</div><div class="lbl">This week's sessions</div></div>
+    <div class="stat"><div class="num" id="stat-gain">–</div><div class="lbl" id="stat-gain-lbl">Top monthly gain</div></div>
+  </div>
+
+  <div class="fade-in" style="animation-delay:.05s; position:relative; z-index:40;">
+    <div class="sec-title" id="form-title">Log a workout</div>
+    <div class="card">
+      <div class="row" style="margin-bottom:16px">
+        <div style="flex:0 0 170px"><label>Date</label><input type="date" id="session-date"></div>
+      </div>
+      <div style="margin-bottom:16px">
+        <label>Type (optional)</label>
+        <div class="tag-row-wrap">
+        <div class="tag-row" id="tag-row">
+          <span id="tag-options"></span>
+          <button type="button" id="tag-add-btn" class="tag-pill" style="padding:6px 11px;color:var(--muted);">+</button>
+          <input type="text" id="tag-add" class="tag-add-input" placeholder="New type…" autocomplete="off" style="display:none">
+        </div>
+        </div>
+      </div>
+      <div class="tpl-bar" id="template-bar"></div>
+      <div id="exercises"></div>
+      <div class="row" style="margin-top:6px">
+        <div>
+          <label>Add exercise</label>
+          <div class="combo">
+            <input type="text" id="new-ex-name" placeholder="Choose or type an exercise" autocomplete="off">
+            <div class="combo-list" id="ex-list"></div>
+          </div>
+          <div id="mem-hint"></div>
+        </div>
+        <button class="btn-ghost" id="add-ex-btn">+ Add</button>
+      </div>
+       <div class="form-actions">
+         <button class="btn-volt" id="save-btn">Save workout <span aria-hidden="true">↗</span></button>
+        <button class="btn-ghost" id="clear-btn">Clear</button>
+        <button class="btn-ghost" id="cancel-edit-btn" style="display:none">Cancel edit</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="fade-in" style="animation-delay:.1s">
+     <div class="sec-title">Training history</div>
+    <div id="history"></div>
+      <div class="data-actions">
+        <button class="btn-mini" id="settings-btn">Notion sync</button>
+        <button class="btn-mini" id="export-btn">Export data</button>
+        <button class="btn-mini" id="import-btn">Import data</button>
+      </div>
+  </div>
+  </div><!-- /#log-view -->
+
+  <div id="stats-view" style="display:none">
+    <div class="sec-title">Progress</div>
+    <div class="stat-mode">
+      <button type="button" class="stat-mode-btn active" data-mode="exercise">By exercise</button>
+      <button type="button" class="stat-mode-btn" data-mode="template">By template</button>
+    </div>
+
+    <div class="card" id="stat-exercise-pane">
+      <label>Exercise (strength or cardio)</label>
+      <div class="combo">
+        <select id="stat-ex-select" class="stat-select"></select>
+      </div>
+      <div id="stat-chart" style="margin-top:18px"></div>
+      <div id="stat-table" style="margin-top:10px"></div>
+    </div>
+
+    <div id="stat-template-pane" style="display:none">
+      <div class="card" style="margin-bottom:18px">
+        <label>Template</label>
+        <div class="combo">
+          <select id="stat-tpl-select" class="stat-select"></select>
+        </div>
+      </div>
+      <div id="stat-tpl-charts"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="export-modal">
+  <div class="modal">
+    <h3>Export data</h3>
+    <p>Your full workout history and exercise list. Download it as a file, or copy it somewhere safe as a backup.</p>
+    <textarea id="export-text" readonly></textarea>
+    <div class="modal-row">
+      <button class="btn-volt" id="export-download">Download file</button>
+      <button class="btn-ghost" id="export-copy">Copy</button>
+      <button class="btn-ghost" id="export-close">Close</button>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay" id="import-modal">
+  <div class="modal">
+    <h3>Import data</h3>
+    <p>Choose a backup file, or paste its contents below. Imported workouts are merged with what is already here (duplicates are skipped).</p>
+    <div class="file-row"><input type="file" id="import-file" accept="application/json,.json"></div>
+    <textarea id="import-text" placeholder="...or paste backup data here"></textarea>
+    <div class="modal-row">
+      <button class="btn-volt" id="import-do">Import</button>
+      <button class="btn-ghost" id="import-close">Close</button>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay" id="settings-modal">
+  <div class="modal">
+    <h3>Notion sync</h3>
+    <p>Workouts are saved on this device, and sync to Notion only after you add your database ID here. Paste your Notion database ID below and Save.</p>
+    <label>Notion database ID</label>
+    <input type="text" id="db-input" placeholder="e.g. 36ff66f7409e80229813eadcdfed3d3e" autocomplete="off">
+    <div class="modal-row">
+      <button class="btn-volt" id="settings-save">Save</button>
+      <button class="btn-ghost" id="settings-close">Close</button>
+    </div>
+    <div style="border-top:1px solid var(--line); margin-top:18px; padding-top:16px;">
+      <p style="margin-bottom:10px;">Restore your history from Notion — pulls every workout from your database onto this device.</p>
+      <button class="btn-ghost" id="pull-btn" style="width:100%">Pull workouts from Notion</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const STORE_KEY = 'iron-log-sessions';
+const DB_KEY = 'iron-log-db';
+const DRAFT_KEY = 'iron-log-draft';   // in-progress (unsaved) workout, so closing the app mid-workout doesn't lose it
+let notionDbId = '';
+let sessions = [];
+let draftExercises = [];
+let customExercises = [];
+let customTags = [];
+let draftTag = '';
+let templates = Object.create(null);
+let tplSaveArmed = false, tplSaveTimer = null;
+const TPL_KEY = 'iron-log-templates';
+let cardioNames = [];
+const CARDIO_KEY = 'iron-log-cardio';
+let hiddenExercises = [];
+const HIDDEN_KEY = 'iron-log-hidden-ex';
+const PRESET_CARDIO = ['Treadmill', 'Stationary Bike', 'Elliptical', 'Stair Climber', 'Rowing Machine', 'Ski Erg'];
+const TAG_KEY = 'iron-log-tags';
+const PRESET_TAGS = ['Push', 'Pull', 'Legs', 'Full Body', 'Upper', 'Lower', 'Cardio'];
+const EX_KEY = 'iron-log-exercises';
+const PRESET_EXERCISES = [
+  'Back Squat','Front Squat','Deadlift','Romanian Deadlift','Bench Press','Incline Bench Press',
+  'Overhead Press','Dumbbell Shoulder Press','Barbell Row','Lat Pulldown','Pull-Up','Chin-Up',
+  'Bicep Curl','Tricep Extension','Lateral Raise','Face Pull','Lunge','Leg Press','Leg Curl',
+  'Leg Extension','Calf Raise','Hip Thrust','Dip','Plank'
+];
+const $ = id => document.getElementById(id);
+const CHEV = '<svg class="chev" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>';
+const XICON = '<svg class="ic-x" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>';
+const EDITICON = '<svg class="ic-edit" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+const ICON_WEIGHTS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.596 12.768a2 2 0 1 0 2.829-2.829l-1.768-1.767a2 2 0 0 0 2.828-2.829l-2.828-2.828a2 2 0 0 0-2.829 2.828l-1.767-1.768a2 2 0 1 0-2.829 2.829z"/><path d="m2.5 21.5 1.4-1.4"/><path d="m20.1 3.9 1.4-1.4"/><path d="M5.343 21.485a2 2 0 1 0 2.829-2.828l1.767 1.768a2 2 0 1 0 2.829-2.829l-6.364-6.364a2 2 0 1 0-2.829 2.829l1.768 1.767a2 2 0 0 0-2.828 2.829z"/><path d="m9.6 14.4 4.8-4.8"/></svg>';
+const ICON_CARDIO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z"/><path d="M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z"/><path d="M16 17h4"/><path d="M4 13h4"/></svg>';
+let editingId = null;
+
+/* ---------- Storage ---------- */
+function loadSessions() {
+  try { const raw = localStorage.getItem(STORE_KEY); const parsed = raw ? JSON.parse(raw) : []; sessions = Array.isArray(parsed) ? parsed.filter(validSession) : []; }
+  catch (e) { sessions = []; }
+}
+function validSession(s) {
+  return s && typeof s.id === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.date) &&
+    Array.isArray(s.exercises) && s.exercises.every(ex =>
+      ex && typeof ex.name === 'string' && Array.isArray(ex.sets) &&
+      ex.sets.every(set => set && typeof set === 'object' && !Array.isArray(set)));
+}
+function persist() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(sessions)); }
+  catch (e) { toast('Could not save — storage full or blocked'); }
+}
+
+// ---- In-progress workout autosave ----
+// The form (draftExercises + tag + date) only lived in memory, so closing the
+// app mid-workout lost everything. We snapshot it to localStorage on every
+// change and restore it on launch.
+function saveDraft() {
+  try {
+    const dateVal = ($('session-date') && $('session-date').value) || '';
+    const hasContent = (draftExercises && draftExercises.length) || editingId || (draftTag && draftTag.trim());
+    if (!hasContent) { localStorage.removeItem(DRAFT_KEY); return; }
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({
+      exercises: draftExercises,
+      tag: draftTag || '',
+      date: dateVal,
+      editingId: editingId || null,
+    }));
+  } catch (e) {}
+}
+let _draftSaveTimer = null;
+function scheduleDraftSave() {            // debounced — used for rapid keystrokes
+  clearTimeout(_draftSaveTimer);
+  _draftSaveTimer = setTimeout(saveDraft, 250);
+}
+function loadDraft() {
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem(DRAFT_KEY)); } catch (e) { d = null; }
+  if (!d || typeof d !== 'object') return;
+  if (Array.isArray(d.exercises)) draftExercises = d.exercises.filter(ex =>
+    ex && typeof ex.name === 'string' && Array.isArray(ex.sets) &&
+    ex.sets.every(set => set && typeof set === 'object' && !Array.isArray(set)));
+  draftTag = d.tag || '';
+  if (d.date && $('session-date')) $('session-date').value = d.date;
+  // Only resume "edit" mode if that saved workout still exists.
+  editingId = (d.editingId && sessions.some(s => s.id === d.editingId)) ? d.editingId : null;
+}
+
+/* ---------- Notion sync (best effort, never blocks local save) ---------- */
+async function archiveNotion(pageIds, archived) {
+  if (!pageIds || !pageIds.length) return true;
+  try {
+    const response = await fetch('/api/log', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'archive', pageIds, archived })
+    });
+    return response.ok;
+  } catch (e) { return false; }
+}
+async function syncSession(session) {
+  try {
+    // Serialise exercises for Notion: convert cardio mins strings ("5:30") to decimal minutes
+    const exercises = session.exercises.map(ex => {
+      if (ex.type !== 'cardio') return ex;
+      return { ...ex, sets: ex.sets.map(s => ({ ...s, mins: parseMins(s.mins) || '' })) };
+    });
+    const r = await fetch('/api/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: session.date, exercises, tag: session.tag || undefined, sessionId: session.id, databaseId: notionDbId || undefined })
+    });
+    if (r.ok) { let ids = []; try { const j = await r.json(); ids = j.ids || []; } catch (e) {} return { ok: true, ids }; }
+    let msg = 'HTTP ' + r.status;
+    try {
+      const j = await r.json(); msg = j.error || msg;
+      if (j.detail) { try { const nd = JSON.parse(j.detail); msg = nd.message || j.detail; } catch (e) { msg = j.detail; } }
+    } catch (e) {}
+    return { ok: false, error: msg };
+  } catch (e) { return { ok: false, error: 'Could not reach /api/log (network).' }; }
+}
+async function finishSync(session, result) {
+  if (!result.ok) return false;
+  const previousIds = [...new Set([...(session.notionPageIds || []), ...(session.pendingArchiveIds || [])])];
+  session.notionPageIds = result.ids;
+  if (previousIds.length && !(await archiveNotion(previousIds, true))) {
+    session.pendingArchiveIds = [...new Set([...(session.pendingArchiveIds || []), ...previousIds])];
+    session.synced = false;
+    return false;
+  }
+  session.pendingArchiveIds = [];
+  session.synced = true;
+  return true;
+}
+
+/* ---------- Helpers ---------- */
+function fmtDate(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' });
+}
+function sessionVolume(s) {
+  return s.exercises.reduce((t,ex)=> t + (ex.type === 'cardio' ? 0 : ex.sets.reduce((st,set)=> st + (Number(set.weight)||0)*(Number(set.reps)||0), 0)), 0);
+}
+function totalVolume() { return sessions.reduce((t,s)=>t+sessionVolume(s),0); }
+function lastPerformance(name) {
+  const key = name.trim().toLowerCase(); if (!key) return null;
+  const sorted = [...sessions].sort((a,b)=> b.date.localeCompare(a.date));
+  for (const s of sorted) { const ex = s.exercises.find(e => e.name.trim().toLowerCase() === key); if (ex) return { date: s.date, sets: ex.sets, type: ex.type }; }
+  return null;
+}
+function toast(msg) { const t = $('toast'); t.classList.remove('with-action'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(()=>t.classList.remove('show'), 4200); }
+function showUndo(msg, onUndo) {
+  const t = $('toast'); t.innerHTML = ''; t.classList.add('with-action');
+  const span = document.createElement('span'); span.textContent = msg;
+  const btn = document.createElement('button'); btn.className = 'toast-undo'; btn.textContent = 'Undo';
+  btn.addEventListener('click', () => { t.classList.remove('show'); onUndo(); });
+  t.appendChild(span); t.appendChild(btn);
+  t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 6000);
+}
+function escapeHtml(s){ return String(s ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function loadCardio() { try { const v = JSON.parse(localStorage.getItem(CARDIO_KEY)); cardioNames = Array.isArray(v) ? v.filter(x => typeof x === 'string') : []; } catch (e) { cardioNames = []; } }
+function isCardioName(name) {
+  const k = (name||'').trim().toLowerCase();
+  if (PRESET_CARDIO.some(p => p.toLowerCase() === k)) return true;
+  if (cardioNames.some(p => p.toLowerCase() === k)) return true;
+  return exerciseIsCardio(name);   // also honour how it was last logged
+}
+function rememberCardio(name, on) {
+  const k = (name||'').trim().toLowerCase(); if (!k) return;
+  const has = cardioNames.some(p => p.toLowerCase() === k);
+  if (on && !has) cardioNames.push(name.trim());
+  else if (!on && has) cardioNames = cardioNames.filter(p => p.toLowerCase() !== k);
+  try { localStorage.setItem(CARDIO_KEY, JSON.stringify(cardioNames)); } catch (e) {}
+}
+function blankSet(type) { return type === 'cardio' ? { mins: '', km: '' } : { weight: '', reps: '' }; }
+// Cardio time can be entered as plain minutes ("5", "5.5") or mm:ss ("5:30"). Stored as the raw string; converted to decimal minutes only for maths.
+function parseMins(v) {
+  if (v == null || v === '') return 0;
+  if (typeof v === 'number') return v;
+  const parts = String(v).trim().split(':');
+  if (parts.length === 3) return (parseInt(parts[0],10)||0)*60 + (parseInt(parts[1],10)||0) + (parseInt(parts[2],10)||0)/60;
+  if (parts.length === 2) return (parseInt(parts[0],10)||0) + (parseInt(parts[1],10)||0)/60;
+  return parseFloat(v) || 0;
+}
+function fmtDuration(dec) {
+  const total = Math.round((Number(dec) || 0) * 60);
+  const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
+  if (h > 0) return h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  return m + ':' + String(s).padStart(2, '0');
+}
+// Stopwatch-style mask: digits fill from the right — last 2 = secs, next 2 = mins, rest = hours.
+// e.g. "530" -> 5:30, "10000" -> 1:00:00, "13045" -> 1:30:45
+function maskTime(raw) {
+  const d = String(raw == null ? '' : raw).replace(/\D/g, '').slice(0, 6);
+  if (!d) return '';
+  const secs = d.slice(-2);
+  const rest = d.slice(0, -2);
+  const mins = rest.slice(-2);
+  const hrs  = rest.slice(0, -2);
+  if (hrs)  return parseInt(hrs, 10) + ':' + mins.padStart(2, '0') + ':' + secs.padStart(2, '0');
+  if (mins) return parseInt(mins, 10) + ':' + secs.padStart(2, '0');
+  return '0:' + secs.padStart(2, '0');
+}
+function setSummary(ex) {
+  if (ex.type === 'cardio') return ex.sets.map(s => `<b>${s.mins ? fmtDuration(parseMins(s.mins)) : '0:00'}</b>${s.km ? ' \u00b7 '+escapeHtml(s.km)+'km' : ''}`).join(' &nbsp; ');
+  return ex.sets.map(s => `<b>${escapeHtml(s.weight||0)}</b>\u00d7${escapeHtml(s.reps||0)}`).join(' &nbsp; ');
+}
+
+/* ---------- Draft rendering ---------- */
+let dragIdx = -1, dragging = false;
+function exBlockEls() { return [...$('exercises').querySelectorAll('[data-ex-block]')]; }
+function onDraftPointerDown(e) {
+  const grip = e.target.closest('[data-grip]');
+  if (!grip) return;                       // only the handle starts a drag
+  e.preventDefault();                      // stops text selection / scroll grab
+  const block = grip.closest('[data-ex-block]');
+  dragging = true; dragIdx = +block.dataset.exBlock; dropTarget = -1;
+  block.classList.add('dragging');
+  document.body.classList.add('reordering');
+  if (navigator.vibrate) navigator.vibrate(12);
+}
+let dropTarget = -1, lastPointerY = 0, autoScrollRAF = null;
+function computeDropTarget() {
+  const els = exBlockEls();
+  let target = draftExercises.length;
+  for (let i = 0; i < els.length; i++) {
+    const r = els[i].getBoundingClientRect();
+    if (lastPointerY < r.top + r.height / 2) { target = i; break; }
+  }
+  if (target !== dropTarget) { dropTarget = target; renderDropLine(); }
+}
+function autoScrollTick() {
+  if (!dragging) { autoScrollRAF = null; return; }
+  const h = window.innerHeight;
+  const edge = 90;            // px zone at top/bottom that triggers scrolling
+  const maxSpeed = 14;        // px per frame
+  let dy = 0;
+  if (lastPointerY < edge) dy = -maxSpeed * (1 - lastPointerY / edge);
+  else if (lastPointerY > h - edge) dy = maxSpeed * (1 - (h - lastPointerY) / edge);
+  if (dy) {
+    window.scrollBy(0, dy);
+    computeDropTarget();      // blocks shifted under a stationary finger
+  }
+  autoScrollRAF = requestAnimationFrame(autoScrollTick);
+}
+function onDraftPointerMove(e) {
+  if (!dragging) return;
+  e.preventDefault();
+  lastPointerY = e.clientY;
+  computeDropTarget();
+  if (!autoScrollRAF) autoScrollRAF = requestAnimationFrame(autoScrollTick);
+}
+function renderDropLine() {
+  // remove any existing line
+  const old = $('exercises').querySelector('.drop-line'); if (old) old.remove();
+  if (dropTarget < 0) return;
+  const els = exBlockEls();
+  const line = document.createElement('div'); line.className = 'drop-line';
+  if (dropTarget >= els.length) $('exercises').appendChild(line);
+  else $('exercises').insertBefore(line, els[dropTarget]);
+}
+function onDraftPointerUp() {
+  if (!dragging) return;
+  const from = dragIdx, to = dropTarget;
+  dragging = false; dragIdx = -1; dropTarget = -1;
+  if (autoScrollRAF) { cancelAnimationFrame(autoScrollRAF); autoScrollRAF = null; }
+  document.body.classList.remove('reordering');
+  if (to >= 0 && to !== from && to !== from + 1) {
+    let dest = to; if (dest > from) dest--;
+    const [item] = draftExercises.splice(from, 1);
+    draftExercises.splice(dest, 0, item);
+  }
+  renderDraft();
+}
+function renderDraft() {
+  renderTemplateBar();
+  const box = $('exercises'); box.innerHTML = '';
+  draftExercises.forEach((ex, ei) => {
+    const block = document.createElement('div'); block.className = 'ex-block'; block.dataset.exBlock = ei;
+    const isCardio = ex.type === 'cardio';
+    const last = lastPerformance(ex.name);
+    const memHtml = last ? `<div class="memory"><span class="tag">Last (${fmtDate(last.date)})</span> ${setSummary({ type: last.type, sets: last.sets })}</div>` : '';
+    block.innerHTML = `
+      <div class="ex-head">
+        <button class="drag-grip" data-grip="${ei}" title="Drag to reorder" aria-label="Drag to reorder"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>
+        <div class="ex-name-wrap">
+          <input type="text" class="ex-name-input" value="${escapeHtml(ex.name)}" data-exname="${ei}" autocomplete="off">
+          <button class="type-toggle${isCardio ? ' cardio' : ''}" data-type-toggle="${ei}" title="${isCardio ? 'Cardio — tap for weights' : 'Weights — tap for cardio'}">${isCardio ? ICON_CARDIO : ICON_WEIGHTS}</button>
+        </div>
+        <button class="btn-icon" data-del-ex="${ei}" title="Remove">✕</button>
+      </div>
+      ${memHtml}<div data-sets="${ei}"></div>
+      <button class="btn-ghost add-set-btn" data-add-set="${ei}">${isCardio ? '+ Add interval' : '+ Add set'}</button>`;
+    box.appendChild(block);
+    const setsBox = block.querySelector(`[data-sets="${ei}"]`);
+    ex.sets.forEach((set, si) => {
+      const line = document.createElement('div'); line.className = 'set-line';
+      if (isCardio) {
+        line.innerHTML = `
+          <span class="set-no">${si+1}</span>
+          <input type="text" inputmode="numeric" placeholder="time" value="${set.mins ? fmtDuration(parseMins(set.mins)) : ''}" data-min="${ei}-${si}" style="flex:1;min-width:0">
+          <input type="number" min="0" inputmode="decimal" placeholder="km (opt)" value="${escapeHtml(set.km)}" data-km="${ei}-${si}" style="flex:1.2;min-width:0">
+          <button class="btn-icon" data-del-set="${ei}-${si}" title="Remove">✕</button>`;
+      } else {
+        line.innerHTML = `
+          <span class="set-no">${si+1}</span>
+          <input type="number" min="0" inputmode="decimal" placeholder="kg" value="${escapeHtml(set.weight)}" data-w="${ei}-${si}" style="flex:1">
+          <span class="x">×</span>
+          <input type="number" min="0" step="1" inputmode="numeric" placeholder="reps" value="${escapeHtml(set.reps)}" data-r="${ei}-${si}" style="flex:1">
+          <button class="btn-icon" data-del-set="${ei}-${si}" title="Remove set">✕</button>`;
+      }
+      setsBox.appendChild(line);
+    });
+  });
+  saveDraft();   // persist the in-progress workout after every structural change
+}
+
+/* ---------- Workout templates (per type) ---------- */
+function loadTemplates() {
+  templates = Object.create(null);
+  try {
+    const saved = JSON.parse(localStorage.getItem(TPL_KEY));
+    if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
+      Object.entries(saved).forEach(([key, items]) => {
+        if (Array.isArray(items)) templates[key] = items.filter(item =>
+          typeof item === 'string' || (item && typeof item.name === 'string'));
+      });
+    }
+  } catch (e) {}
+}
+function renderTemplateBar() {
+  const bar = $('template-bar'); if (!bar) return;
+  clearTimeout(tplSaveTimer); tplSaveArmed = false;
+  const key = draftTag.trim().toLowerCase();
+  let html = '';
+  if (key && templates[key] && templates[key].length) html += `<button type="button" class="tpl-btn" id="tpl-load">\u21bb Load ${escapeHtml(draftTag)} template</button>`;
+  if (key && draftExercises.length) { const exists = templates[key] && templates[key].length; html += `<button type="button" class="tpl-btn save" id="tpl-save">${exists ? 'Update' : 'Save as'} ${escapeHtml(draftTag)} template</button>`; }
+  bar.innerHTML = html;
+}
+function loadTemplate() {
+  const key = draftTag.trim().toLowerCase(); const tpl = templates[key] || [];
+  if (!tpl.length) return;
+  const present = new Set(draftExercises.map(e => e.name.trim().toLowerCase()));
+  let added = 0;
+  tpl.forEach(item => {
+    const name = (typeof item === 'string') ? item : (item && item.name);   // tolerate old saved formats
+    if (!name || present.has(name.trim().toLowerCase())) return;
+    if (isCardioName(name)) draftExercises.push({ name, type: 'cardio', sets: [{ mins: '', km: '' }] });
+    else draftExercises.push({ name, sets: [{ weight: '', reps: '' }] });   // start blank; "Last time" hint guides the numbers
+    added++;
+  });
+  renderDraft();
+  toast(added ? ('Loaded ' + draftTag + ' template') : 'Those exercises are already added');
+}
+function saveTemplate() {
+  const key = draftTag.trim().toLowerCase();
+  if (!key || !draftExercises.length) return;
+  const exists = templates[key] && templates[key].length;
+  const btn = $('tpl-save');
+  if (exists && !tplSaveArmed) {
+    tplSaveArmed = true;
+    if (btn) { btn.textContent = 'Tap to confirm'; btn.classList.add('save-confirm'); }
+    tplSaveTimer = setTimeout(() => { tplSaveArmed = false; renderTemplateBar(); }, 3000);
+    return;
+  }
+  clearTimeout(tplSaveTimer); tplSaveArmed = false;
+  templates[key] = draftExercises.map(e => canonicalName(e.name) || e.name.trim()).filter(Boolean);
+  try { localStorage.setItem(TPL_KEY, JSON.stringify(templates)); } catch (e) {}
+  renderTemplateBar();
+  toast(exists ? 'Template updated \u2713' : 'Template saved \u2713');
+}
+$('template-bar').addEventListener('click', e => {
+  if (e.target.id === 'tpl-load') loadTemplate();
+  else if (e.target.id === 'tpl-save') saveTemplate();
+});
+
+/* ---------- Weekly summary stats ---------- */
+function startOfWeek(d) {
+  const x = new Date(d); x.setHours(0, 0, 0, 0);
+  const monday = (x.getDay() + 6) % 7;   // 0 = Monday
+  x.setDate(x.getDate() - monday);
+  return x;
+}
+function topWeightByExercise(wk) {
+  const m = new Map();
+  wk.forEach(s => s.exercises.forEach(ex => {
+    if (ex.type === 'cardio') return;   // cardio has no weight to compare
+    const top = ex.sets.reduce((mm, st) => Math.max(mm, Number(st.weight) || 0), 0);
+    const k = ex.name.trim().toLowerCase();
+    if (!m.has(k) || top > m.get(k).top) m.set(k, { name: ex.name.trim(), top });
+  }));
+  return m;
+}
+function ymOfDate(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+function prevMonthKey(key) { const [y, m] = key.split('-').map(Number); return ymOfDate(new Date(y, m - 2, 1)); }
+function sessionsInMonth(key) { return sessions.filter(s => s.date.slice(0, 7) === key); }
+function topGain(curSessions, prevSessions) {
+  const tm = topWeightByExercise(curSessions), lm = topWeightByExercise(prevSessions);
+  let best = null;
+  tm.forEach((current, k) => {
+    if (lm.has(k)) { const d = current.top - lm.get(k).top; if (d > 0 && (!best || d > best.delta)) best = { name: current.name, delta: d }; }
+  });
+  return best;
+}
+function renderStats() {
+  const thisStart = startOfWeek(new Date());
+  const nextStart = new Date(thisStart); nextStart.setDate(nextStart.getDate() + 7);
+  const within = (iso, a, b) => { const t = new Date(iso + 'T00:00:00'); return t >= a && t < b; };
+  $('stat-sessions').textContent = sessions.filter(s => within(s.date, thisStart, nextStart)).length;
+
+  const thisM = ymOfDate(new Date());
+  const best = topGain(sessionsInMonth(thisM), sessionsInMonth(prevMonthKey(thisM)));
+  if (best) {
+    $('stat-gain').textContent = '+' + best.delta;
+    $('stat-gain-lbl').textContent = best.name + ' \u25b2 kg';
+  } else {
+    $('stat-gain').textContent = '\u2013';
+    $('stat-gain-lbl').textContent = 'Top monthly gain';
+  }
+}
+
+/* ---------- History rendering (grouped by month) ---------- */
+let expandedMonths = new Set();
+let monthsSeeded = false;
+
+function monthKey(iso) { return iso.slice(0, 7); }            // "YYYY-MM"
+function monthLabel(key) {
+  const [y, m] = key.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+}
+
+function buildSessionEl(s) {
+  const el = document.createElement('div'); el.className = 'session';
+  const exCount = s.exercises.length;
+  const setCount = s.exercises.reduce((t, e) => t + e.sets.length, 0);
+  const badge = s.synced
+    ? `<span class="sync-badge sync-ok" title="Synced to Notion"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Synced</span>`
+    : `<span class="sync-badge sync-pending" data-sync="${escapeHtml(s.id)}">Sync</span>`;
+  el.innerHTML = `
+    <div class="session-head" role="button" tabindex="0" aria-expanded="false" aria-label="Workout on ${escapeHtml(fmtDate(s.date))}">
+      <div>
+        <div class="session-date">${fmtDate(s.date)}</div>
+        <div class="session-meta">${exCount} exercise${exCount !== 1 ? 's' : ''} \u00b7 ${setCount} sets</div>
+        ${s.tag ? `<div class="session-tag">${escapeHtml(s.tag)}</div>` : ''}
+      </div>
+      <div style="display:flex; align-items:center; gap:12px;">
+        ${badge}
+        <button class="btn-icon" data-edit-session="${escapeHtml(s.id)}" aria-label="Edit workout" title="Edit">${EDITICON}</button>
+        <button class="btn-icon" data-del-session="${escapeHtml(s.id)}" aria-label="Delete workout" title="Delete">${XICON}</button>
+        ${CHEV}
+      </div>
+    </div>
+    <div class="session-body">
+      ${s.exercises.map(ex => `
+        <div class="hist-ex">
+          <div class="hist-ex-name">${escapeHtml(ex.name)}</div>
+          <div class="hist-sets">${ex.type === 'cardio'
+            ? ex.sets.map(st => `<span class="set-pill"><b>${st.mins ? fmtDuration(parseMins(st.mins)) : '0:00'}</b>${st.km ? ' \u00b7 '+escapeHtml(st.km)+' km' : ''}</span>`).join('')
+            : ex.sets.map(st => `<span class="set-pill"><b>${escapeHtml(st.weight || 0)}</b> kg \u00d7 ${escapeHtml(st.reps || 0)}</span>`).join('')}</div>
+        </div>`).join('')}
+    </div>`;
+  const head = el.querySelector('.session-head');
+  head.addEventListener('click', e => {
+    if (e.target.closest('[data-del-session]') || e.target.closest('[data-sync]') || e.target.closest('[data-edit-session]')) return;
+    el.classList.toggle('open');
+    head.setAttribute('aria-expanded', String(el.classList.contains('open')));
+  });
+  head.addEventListener('keydown', e => {
+    if (e.target !== head || (e.key !== 'Enter' && e.key !== ' ')) return;
+    e.preventDefault(); head.click();
+  });
+  const delBtn = el.querySelector('[data-del-session]');
+  let armed = false, armTimer = null;
+  delBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    if (!armed) {
+      armed = true; delBtn.classList.add('confirm-del'); delBtn.textContent = 'Delete?';
+      armTimer = setTimeout(() => { armed = false; delBtn.classList.remove('confirm-del'); delBtn.innerHTML = XICON; }, 3000);
+      return;
+    }
+    clearTimeout(armTimer);
+    const removed = s;
+    sessions = sessions.filter(x => x.id !== removed.id); persist(); renderHistory();
+    const archivedIds = [...new Set([...(removed.notionPageIds || []), ...(removed.pendingArchiveIds || [])])];
+    archiveNotion(archivedIds, true);
+    showUndo('Workout deleted', () => {
+      sessions.push(removed); persist(); renderHistory();
+      archiveNotion(archivedIds, false);
+      toast('Workout restored');
+    });
+  });
+  const syncBtn = el.querySelector('[data-sync]');
+  if (syncBtn) syncBtn.addEventListener('click', async e => {
+    e.stopPropagation();
+    if (!notionDbId) { $('db-input').value = notionDbId; $('settings-modal').classList.add('open'); toast('Add your Notion database ID to sync'); return; }
+    syncBtn.textContent = '\u2026';
+    if (s.pendingArchiveIds && s.pendingArchiveIds.length) {
+      const done = await archiveNotion(s.pendingArchiveIds, true);
+      if (done) { s.pendingArchiveIds = []; s.synced = true; }
+      persist(); renderHistory();
+      toast(done ? 'Notion cleanup complete' : 'Could not remove previous Notion rows');
+      return;
+    }
+    const res = await syncSession(s);
+    const synced = await finishSync(s, res);
+    persist(); renderHistory();
+    toast(synced ? 'Synced to Notion ✓' : res.ok ? 'New rows saved; tap Sync to finish cleanup' : ('Notion: ' + res.error));
+  });
+  const editBtn = el.querySelector('[data-edit-session]');
+  if (editBtn) editBtn.addEventListener('click', e => { e.stopPropagation(); editSession(s); });
+  return el;
+}
+
+function renderHistory() {
+  renderStats();
+  const box = $('history');
+  if (!sessions.length) { box.innerHTML = `<div class="card empty"><div class="big">NO SESSIONS YET</div><div>Log your first workout above and it'll show up here.</div></div>`; return; }
+
+  const sorted = [...sessions].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+  const groups = []; const idx = {};
+  sorted.forEach(s => {
+    const k = monthKey(s.date);
+    if (!(k in idx)) { idx[k] = groups.length; groups.push({ key: k, sessions: [] }); }
+    groups[idx[k]].sessions.push(s);
+  });
+  if (!monthsSeeded) { expandedMonths.add(groups[0].key); monthsSeeded = true; }
+
+  box.innerHTML = '';
+  groups.forEach(g => {
+    const open = expandedMonths.has(g.key);
+    const mg = topGain(g.sessions, sessionsInMonth(prevMonthKey(g.key)));
+    const gainHtml = mg ? `<span class="month-gain">+${mg.delta}kg ${escapeHtml(mg.name)}</span>` : '';
+    const wrap = document.createElement('div'); wrap.className = 'month' + (open ? ' open' : '');
+    wrap.innerHTML = `
+      <div class="month-head" role="button" tabindex="0" aria-expanded="${open}">
+        <div class="month-title">${monthLabel(g.key)}</div>
+        <div class="month-right">
+          <div class="month-meta">
+            <span class="month-sub">${g.sessions.length} workout${g.sessions.length !== 1 ? 's' : ''}</span>
+            ${gainHtml}
+          </div>
+          ${CHEV}
+        </div>
+      </div>
+      <div class="month-body"></div>`;
+    box.appendChild(wrap);
+    const body = wrap.querySelector('.month-body');
+    if (open) g.sessions.forEach(s => body.appendChild(buildSessionEl(s)));
+    const monthHead = wrap.querySelector('.month-head');
+    monthHead.addEventListener('click', () => {
+      if (expandedMonths.has(g.key)) { expandedMonths.delete(g.key); wrap.classList.remove('open'); body.innerHTML = ''; }
+      else { expandedMonths.add(g.key); wrap.classList.add('open'); g.sessions.forEach(s => body.appendChild(buildSessionEl(s))); }
+      monthHead.setAttribute('aria-expanded', String(expandedMonths.has(g.key)));
+    });
+    monthHead.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); monthHead.click(); }
+    });
+  });
+}
+
+/* ---------- Exercise options (presets + history + custom) ---------- */
+function loadExercises() {
+  try { const raw = localStorage.getItem(EX_KEY); const v = raw ? JSON.parse(raw) : []; customExercises = Array.isArray(v) ? v.filter(x => typeof x === 'string') : []; }
+  catch (e) { customExercises = []; }
+}
+function rememberExercise(name) {
+  const exists = allExerciseOptions().some(o => o.toLowerCase() === name.toLowerCase());
+  if (!exists) { customExercises.push(name); try { localStorage.setItem(EX_KEY, JSON.stringify(customExercises)); } catch (e) {} }
+}
+function loadHidden() { try { const v = JSON.parse(localStorage.getItem(HIDDEN_KEY)); hiddenExercises = Array.isArray(v) ? v.filter(x => typeof x === 'string') : []; } catch (e) { hiddenExercises = []; } }
+function isHidden(name) { const k = (name||'').trim().toLowerCase(); return hiddenExercises.some(x => x.toLowerCase() === k); }
+function removeExerciseOption(name) {
+  const k = name.trim().toLowerCase();
+  // drop from custom + cardio lists, and suppress preset/history-derived names via the hidden list
+  customExercises = customExercises.filter(x => x.trim().toLowerCase() !== k);
+  cardioNames = cardioNames.filter(x => x.trim().toLowerCase() !== k);
+  if (!hiddenExercises.some(x => x.toLowerCase() === k)) hiddenExercises.push(name.trim());
+  try { localStorage.setItem(EX_KEY, JSON.stringify(customExercises)); } catch (e) {}
+  try { localStorage.setItem(CARDIO_KEY, JSON.stringify(cardioNames)); } catch (e) {}
+  try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(hiddenExercises)); } catch (e) {}
+}
+function allExerciseOptions() {
+  const map = new Map(); // lowercase -> first-seen display name
+  const used = sessions.flatMap(s => s.exercises.map(e => e.name));
+  [...used, ...customExercises, ...PRESET_EXERCISES, ...PRESET_CARDIO].forEach(n => {
+    const k = (n || '').trim().toLowerCase(); if (k && !map.has(k)) map.set(k, n.trim());
+  });
+  return [...map.values()].filter(o => !isHidden(o)).sort((a, b) => a.localeCompare(b));
+}
+// Most recently used exercise names (newest session first), up to `limit`.
+function recentExercises(limit) {
+  const seen = new Map();
+  [...sessions].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt)
+    .forEach(s => s.exercises.forEach(ex => {
+      const k = ex.name.trim().toLowerCase();
+      if (k && !seen.has(k) && !isHidden(ex.name)) seen.set(k, ex.name.trim());
+    }));
+  return [...seen.values()].slice(0, limit || 6);
+}
+// Snap a typed name to its existing canonical spelling (case/space-insensitive).
+// Falls back to a tidy Title Case for brand-new exercises so they store consistently.
+function canonicalName(name) {
+  const key = (name || '').trim().toLowerCase();
+  if (!key) return '';
+  const match = allExerciseOptions().find(o => o.trim().toLowerCase() === key);
+  if (match) return match;
+  return name.trim().replace(/\s+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+function lastSummary(name) {
+  const last = lastPerformance(name); if (!last) return '';
+  const top = last.sets.reduce((m, s) => Math.max(m, Number(s.weight) || 0), 0);
+  return top ? `last ${top}kg` : '';
+}
+
+/* ---------- Combobox ---------- */
+let comboActive = -1;
+function comboRow(o) {
+  const sub = lastSummary(o);
+  return `<div class="combo-item" data-pick="${escapeHtml(o)}"><span class="ci-name">${escapeHtml(o)}</span>${sub ? `<span class="ci-sub">${sub}</span>` : ''}<button class="ci-del" data-del-opt="${escapeHtml(o)}" title="Remove from list">\u2715</button></div>`;
+}
+function renderCombo() {
+  const inp = $('new-ex-name'), list = $('ex-list');
+  const typed = inp.value.trim(), q = typed.toLowerCase();
+  const all = allExerciseOptions();
+  comboActive = -1;
+  let html = '';
+
+  if (q) {
+    // Searching: single filtered list, plus an add-new option
+    const exact = all.some(o => o.toLowerCase() === q);
+    if (!exact) html += `<div class="combo-item combo-add" data-add-new="1">+ Add “${escapeHtml(typed)}”<span class="ci-sub">new</span></div>`;
+    html += all.filter(o => o.toLowerCase().includes(q)).slice(0, 60).map(comboRow).join('');
+  } else {
+    // Browsing: Recent section, then everything
+    const recent = recentExercises(6);
+    if (recent.length) {
+      html += `<div class="combo-head">Recent</div>` + recent.map(comboRow).join('');
+      html += `<div class="combo-head">All exercises</div>`;
+    }
+    html += all.slice(0, 80).map(comboRow).join('');
+  }
+
+  if (!html) html = `<div class="combo-item" style="color:var(--muted);cursor:default">Type a name to add it</div>`;
+  list.innerHTML = html; list.classList.add('open');
+}
+function closeCombo() { $('ex-list').classList.remove('open'); comboActive = -1; }
+(function attachDrag(){
+  const ex = $('exercises'); if (!ex || ex._dragBound) return; ex._dragBound = true;
+  ex.addEventListener('pointerdown', onDraftPointerDown);
+  ex.addEventListener('pointermove', onDraftPointerMove);
+  ex.addEventListener('pointerup', onDraftPointerUp);
+  ex.addEventListener('pointercancel', onDraftPointerUp);
+})();
+
+$('new-ex-name').addEventListener('focus', renderCombo);
+$('new-ex-name').addEventListener('input', () => {
+  renderCombo();
+  const last = lastPerformance($('new-ex-name').value);
+  $('mem-hint').innerHTML = last
+    ? `<div class="memory"><span class="tag">Last time</span> ${fmtDate(last.date)} · ${setSummary(last)}</div>`
+    : '';
+});
+$('new-ex-name').addEventListener('keydown', e => {
+  const items = [...$('ex-list').querySelectorAll('[data-pick],[data-add-new]')];
+  if (e.key === 'ArrowDown') { e.preventDefault(); comboActive = Math.min(comboActive + 1, items.length - 1); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); comboActive = Math.max(comboActive - 1, 0); }
+  else if (e.key === 'Enter') { e.preventDefault(); (comboActive >= 0 && items[comboActive]) ? items[comboActive].click() : addExercise(); return; }
+  else if (e.key === 'Escape') { closeCombo(); return; }
+  else return;
+  items.forEach((el, i) => el.classList.toggle('active', i === comboActive));
+  if (items[comboActive]) items[comboActive].scrollIntoView({ block: 'nearest' });
+});
+// mousedown fires before the input loses focus, so the selection registers cleanly
+let delArmedOpt = null, delArmedTimer = null;
+function disarmDelOpt() { delArmedOpt = null; clearTimeout(delArmedTimer); }
+function handleComboMouse(e) {
+  const del = e.target.closest('[data-del-opt]');
+  if (del) {
+    e.preventDefault(); e.stopPropagation();
+    const name = del.dataset.delOpt;
+    if (delArmedOpt !== name) {
+      disarmDelOpt(); delArmedOpt = name;
+      del.classList.add('confirm'); del.textContent = 'Tap to confirm';
+      delArmedTimer = setTimeout(() => { delArmedOpt = null; renderCombo(); }, 3000);
+      return;
+    }
+    disarmDelOpt(); removeExerciseOption(name); renderCombo(); toast('Removed from list');
+    return;
+  }
+  const pick = e.target.closest('[data-pick]'), addNew = e.target.closest('[data-add-new]');
+  if (pick) { e.preventDefault(); addExercise(pick.dataset.pick); }
+  else if (addNew) { e.preventDefault(); addExercise($('new-ex-name').value.trim()); }
+}
+$('ex-list').addEventListener('mousedown', handleComboMouse);
+document.addEventListener('click', e => { if (!e.target.closest('.combo')) closeCombo(); });
+$('add-ex-btn').addEventListener('click', () => addExercise());
+
+function addExercise(forcedName) {
+  const inp = $('new-ex-name');
+  let name = (forcedName != null ? forcedName : inp.value).trim();
+  if (!name) { toast('Choose or type an exercise'); return; }
+  name = canonicalName(name);
+  rememberExercise(name);
+  if (isCardioName(name)) {
+    draftExercises.push({ name, type: 'cardio', sets: [{ mins: '', km: '' }] });
+  } else {
+    draftExercises.push({ name, sets: [{ weight: '', reps: '' }] });   // start blank; "Last time" hint still shows previous numbers
+  }
+  inp.value = ''; $('mem-hint').innerHTML = ''; closeCombo(); renderDraft();
+}
+$('exercises').addEventListener('click', e=>{
+  const delEx = e.target.closest('[data-del-ex]'); const addSet = e.target.closest('[data-add-set]'); const delSet = e.target.closest('[data-del-set]'); const typeT = e.target.closest('[data-type-toggle]');
+  if (delEx) { draftExercises.splice(+delEx.dataset.delEx,1); renderDraft(); }
+  else if (typeT) {
+    const ei = +typeT.dataset.typeToggle; const ex = draftExercises[ei];
+    ex.type = (ex.type === 'cardio') ? undefined : 'cardio';
+    ex.sets = [blankSet(ex.type)];                 // reset sets to the new shape
+    rememberCardio(ex.name, ex.type === 'cardio'); // remember choice for next time
+    renderDraft();
+  }
+  else if (addSet) { const ei = +addSet.dataset.addSet; const ex = draftExercises[ei]; ex.sets.push(blankSet(ex.type)); renderDraft(); }
+  else if (delSet) { const [ei,si] = delSet.dataset.delSet.split('-').map(Number); const ex = draftExercises[ei]; ex.sets.splice(si,1); if (!ex.sets.length) ex.sets.push(blankSet(ex.type)); renderDraft(); }
+});
+$('exercises').addEventListener('input', e=>{
+  const d = e.target.dataset;
+  if (d.w) { const [ei,si]=d.w.split('-').map(Number); draftExercises[ei].sets[si].weight = e.target.value; }
+  if (d.r) { const [ei,si]=d.r.split('-').map(Number); draftExercises[ei].sets[si].reps = e.target.value; }
+  if (d.min) {
+    const masked = maskTime(e.target.value);
+    if (e.target.value !== masked) {
+      e.target.value = masked;
+      try { e.target.setSelectionRange(masked.length, masked.length); } catch (err) {}
+    }
+    const [ei, si] = d.min.split('-').map(Number);
+    draftExercises[ei].sets[si].mins = masked;
+  }
+  if (d.km) { const [ei,si]=d.km.split('-').map(Number); draftExercises[ei].sets[si].km = e.target.value; }
+  if (d.exname !== undefined) { draftExercises[+d.exname].name = e.target.value; }
+  scheduleDraftSave();   // keep typed weights/reps/time/name through an app close
+});
+let clearArmed = false, clearTimer = null;
+$('clear-btn').addEventListener('click', () => {
+  if (!draftExercises.length) return;
+  const b = $('clear-btn');
+  if (!clearArmed) {
+    clearArmed = true; b.textContent = 'Tap to confirm'; b.classList.add('confirm-clear');
+    clearTimer = setTimeout(() => { clearArmed = false; b.textContent = 'Clear'; b.classList.remove('confirm-clear'); }, 3000);
+    return;
+  }
+  clearTimeout(clearTimer); clearArmed = false; b.textContent = 'Clear'; b.classList.remove('confirm-clear');
+  const restored = { exercises: JSON.parse(JSON.stringify(draftExercises)), tag: draftTag };
+  draftExercises = []; draftTag = ''; renderDraft(); renderTags(); setTodayDate();
+  showUndo('Workout cleared', () => {
+    draftExercises = restored.exercises; draftTag = restored.tag;
+    renderDraft(); renderTags();
+    toast('Workout restored');
+  });
+});
+
+function editSession(s) {
+  editingId = s.id;
+  draftExercises = JSON.parse(JSON.stringify(s.exercises));
+  draftTag = s.tag || '';
+  $('session-date').value = s.date;
+  renderDraft(); renderTags();
+  $('form-title').textContent = 'Edit workout';
+  $('save-btn').textContent = 'UPDATE WORKOUT';
+  $('cancel-edit-btn').style.display = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  toast('Editing \u2014 make changes, then Update');
+}
+function localToday() { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+$('session-date').addEventListener('change', saveDraft);
+function setTodayDate() { if (!editingId) $('session-date').value = localToday(); }
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !editingId && !draftExercises.length) setTodayDate(); });
+// Flush the in-progress workout immediately when the app is backgrounded or closed,
+// in case a debounced keystroke save hasn't fired yet (common on mobile).
+document.addEventListener('visibilitychange', () => { if (document.hidden) { clearTimeout(_draftSaveTimer); saveDraft(); } });
+window.addEventListener('pagehide', () => { clearTimeout(_draftSaveTimer); saveDraft(); });
+function exitEdit() {
+  editingId = null; draftExercises = []; draftTag = ''; renderDraft(); renderTags(); setTodayDate();
+  $('form-title').textContent = 'Log a Workout';
+  $('save-btn').textContent = 'SAVE WORKOUT';
+  $('cancel-edit-btn').style.display = 'none';
+}
+$('cancel-edit-btn').addEventListener('click', exitEdit);
+
+$('save-btn').addEventListener('click', async ()=>{
+  if (!draftExercises.length) { toast('Add at least one exercise'); return; }
+  if (!$('session-date').value) { toast('Choose a workout date'); return; }
+  const invalidNumber = draftExercises.some(ex => ex.sets.some(set => {
+    const fields = ex.type === 'cardio' ? ['km'] : ['weight', 'reps'];
+    return fields.some(key => set[key] !== '' && set[key] != null &&
+      (!Number.isFinite(Number(set[key])) || Number(set[key]) < 0 ||
+        (key === 'reps' && !Number.isInteger(Number(set[key])))));
+  }));
+  if (invalidNumber) { toast('Use positive numbers for weights, reps and distance'); return; }
+  // Build with the user's typed names first; canonicalise per-mode below.
+  const cleaned = draftExercises.map(ex=>{
+    const name = ex.name.trim().replace(/\s+/g, ' ');
+    if (ex.type === 'cardio') {
+      const sets = ex.sets.filter(s=> (s.mins!=='' && s.mins!=null) || (s.km!=='' && s.km!=null)).map(s=>({mins:s.mins, km:s.km}));
+      return { name, type:'cardio', sets };
+    }
+    return { name, sets: ex.sets.filter(s=> s.weight!=='' || s.reps!=='').map(s=>({weight:s.weight, reps:s.reps})) };
+  }).filter(ex=> ex.sets.length && ex.name);
+  if (!cleaned.length) { toast('Enter some sets first'); return; }
+
+  if (editingId) {
+    const idx = sessions.findIndex(x => x.id === editingId);
+    if (idx === -1) { exitEdit(); toast('That workout no longer exists'); return; }
+    const old = sessions[idx];
+    // In edit mode the typed names are authoritative — no canonical snapping,
+    // so a casing/spelling fix sticks instead of reverting to an old spelling.
+    const updated = { ...old, date: $('session-date').value, exercises: cleaned, tag: draftTag || undefined, synced: false };
+    sessions[idx] = updated;
+    persist(); renderHistory(); exitEdit(); toast('Workout updated');
+    if (notionDbId) {
+      const res = await syncSession(updated);
+      const synced = await finishSync(updated, res);
+      persist(); renderHistory();
+      toast(synced ? 'Updated in Notion \u2713' : res.ok ? 'New rows saved; tap Sync to finish cleanup' : ('Notion: ' + res.error));
+    }
+    return;
+  }
+
+  cleaned.forEach(ex => { ex.name = canonicalName(ex.name) || ex.name; });
+
+  const savedDraft = { exercises: JSON.parse(JSON.stringify(cleaned)), tag: draftTag || '', date: $('session-date').value };
+  const session = { id:'w'+Date.now(), date:$('session-date').value, exercises:cleaned, tag: draftTag || undefined, createdAt:Date.now(), synced:false };
+  sessions.push(session); persist(); draftExercises = []; draftTag = ''; setTodayDate(); renderDraft(); renderTags(); renderHistory();
+
+  const undoSave = () => {
+    if (session.notionPageIds && session.notionPageIds.length) archiveNotion(session.notionPageIds, true);
+    sessions = sessions.filter(x => x.id !== session.id); persist();
+    draftExercises = JSON.parse(JSON.stringify(savedDraft.exercises));   // bring the workout back into the form
+    draftTag = savedDraft.tag;
+    $('session-date').value = savedDraft.date;
+    renderDraft(); renderTags(); renderHistory();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    toast('Workout restored');
+  };
+
+  if (notionDbId) {
+    const res = await syncSession(session);
+    const synced = await finishSync(session, res);
+    persist(); renderHistory();
+    if (synced) showUndo('Workout saved', undoSave);
+    else toast('Notion: ' + res.error);
+  } else {
+    showUndo('Workout saved 💪', undoSave);
+  }
+});
+
+/* ---------- Export / Import ---------- */
+function exportData() {
+  return JSON.stringify({
+    app: 'rep-log', version: 2, exportedAt: new Date().toISOString(),
+    sessions, customExercises, customTags, templates, cardioNames, hiddenExercises
+  }, null, 2);
+}
+function closeModal(id) { $(id).classList.remove('open'); }
+
+$('export-btn').addEventListener('click', () => { $('export-text').value = exportData(); $('export-modal').classList.add('open'); });
+$('export-close').addEventListener('click', () => closeModal('export-modal'));
+$('export-download').addEventListener('click', () => {
+  try {
+    const blob = new Blob([$('export-text').value], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'rep-log-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (e) { toast('Download blocked here — use Copy instead'); }
+});
+$('export-copy').addEventListener('click', async () => {
+  const ta = $('export-text'); ta.focus(); ta.select(); ta.setSelectionRange(0, 999999);
+  let ok = false;
+  try { await navigator.clipboard.writeText(ta.value); ok = true; } catch (e) {}
+  if (!ok) { try { ok = document.execCommand('copy'); } catch (e) {} }
+  toast(ok ? 'Copied to clipboard' : 'Select the text and copy manually');
+});
+
+$('import-btn').addEventListener('click', () => { $('import-text').value = ''; $('import-file').value = ''; $('import-modal').classList.add('open'); });
+$('import-close').addEventListener('click', () => closeModal('import-modal'));
+$('import-file').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => { $('import-text').value = r.result; };
+  r.readAsText(f);
+});
+$('import-do').addEventListener('click', () => {
+  const raw = $('import-text').value.trim();
+  if (!raw) { toast('Choose a file or paste backup data first'); return; }
+  let data;
+  try { data = JSON.parse(raw); } catch (e) { toast('That does not look like valid backup data'); return; }
+  const incoming = Array.isArray(data) ? data : data && data.sessions;
+  if (!Array.isArray(incoming)) { toast('No workouts found in that backup'); return; }
+  const byId = new Map(sessions.map(s => [s.id, s]));
+  let added = 0;
+  incoming.forEach(s => {
+    if (validSession(s) && !byId.has(s.id)) { byId.set(s.id, s); added++; }
+  });
+  sessions = [...byId.values()];
+  const incEx = Array.isArray(data.customExercises) ? data.customExercises : [];
+  function mergeNames(current, incomingNames) {
+    const have = new Set(current.filter(n => typeof n === 'string').map(n => n.toLowerCase()));
+    (Array.isArray(incomingNames) ? incomingNames : []).forEach(n => {
+      if (typeof n === 'string' && n.trim() && !have.has(n.toLowerCase())) {
+        current.push(n); have.add(n.toLowerCase());
+      }
+    });
+  }
+  mergeNames(customExercises, incEx);
+  mergeNames(customTags, data.customTags);
+  mergeNames(cardioNames, data.cardioNames);
+  mergeNames(hiddenExercises, data.hiddenExercises);
+  if (data.templates && typeof data.templates === 'object' && !Array.isArray(data.templates)) {
+    Object.entries(data.templates).forEach(([key, exercises]) => {
+      if (Array.isArray(exercises) && exercises.length && !templates[key]) {
+        templates[key] = exercises.filter(item =>
+          typeof item === 'string' || (item && typeof item.name === 'string'));
+      }
+    });
+  }
+  try {
+    localStorage.setItem(EX_KEY, JSON.stringify(customExercises));
+    localStorage.setItem(TAG_KEY, JSON.stringify(customTags));
+    localStorage.setItem(CARDIO_KEY, JSON.stringify(cardioNames));
+    localStorage.setItem(HIDDEN_KEY, JSON.stringify(hiddenExercises));
+    localStorage.setItem(TPL_KEY, JSON.stringify(templates));
+  } catch (e) { toast('Storage full — backup import may be incomplete'); }
+  persist();
+  monthsSeeded = false;
+  renderDraft(); renderTags(); renderHistory();
+  closeModal('import-modal');
+  toast(added ? ('Imported ' + added + ' workout' + (added !== 1 ? 's' : '')) : 'Already up to date');
+});
+['export-modal', 'import-modal'].forEach(id => {
+  $(id).addEventListener('click', e => { if (e.target.id === id) closeModal(id); });
+});
+
+/* ---------- Notion settings (per-device database) ---------- */
+function loadDbId() { try { notionDbId = localStorage.getItem(DB_KEY) || ''; } catch (e) { notionDbId = ''; } }
+$('settings-btn').addEventListener('click', () => { $('db-input').value = notionDbId; $('settings-modal').classList.add('open'); });
+$('settings-close').addEventListener('click', () => closeModal('settings-modal'));
+$('settings-save').addEventListener('click', () => {
+  notionDbId = $('db-input').value.trim();
+  try { localStorage.setItem(DB_KEY, notionDbId); } catch (e) {}
+  closeModal('settings-modal');
+  toast(notionDbId ? 'Saved — syncing to your database' : 'Saved — sync is off until you add an ID');
+});
+$('settings-modal').addEventListener('click', e => { if (e.target.id === 'settings-modal') closeModal('settings-modal'); });
+
+function reconstructSessions(rows) {
+  const groups = new Map();
+  rows.forEach(r => {
+    const key = r.session || ('day-' + r.date);
+    if (!groups.has(key)) groups.set(key, { id: r.session || ('notion-' + r.date), date: r.date, tag: '', exMap: new Map(), exercises: [], pageIds: [] });
+    const g = groups.get(key);
+    if (r.date && !g.date) g.date = r.date;
+    if (r.tag && !g.tag) g.tag = r.tag;
+    g.pageIds.push(r.pageId);
+    const exKey = (r.exercise || 'Exercise').trim().toLowerCase();
+    let ex = g.exMap.get(exKey);
+    if (!ex) { ex = { name: r.exercise || 'Exercise', sets: [], cardio: false }; g.exMap.set(exKey, ex); g.exercises.push(ex); }
+    const isCardioRow = (r.mins || r.km) && !r.weight && !r.reps;
+    if (isCardioRow) { ex.cardio = true; ex.sets.push({ mins: r.mins, km: r.km }); }
+    else ex.sets.push({ weight: r.weight, reps: r.reps });
+  });
+  return [...groups.values()].map(g => ({
+    id: g.id, date: g.date || localToday(),
+    tag: g.tag || undefined,
+    exercises: g.exercises.map(e => e.cardio ? { name: e.name, type: 'cardio', sets: e.sets } : { name: e.name, sets: e.sets }),
+    createdAt: Date.now(), synced: true, notionPageIds: g.pageIds
+  }));
+}
+
+async function fetchFromNotion() {
+  if (!notionDbId) { toast('Add your Notion database ID first'); return; }
+  const btn = $('pull-btn'); const orig = btn.textContent; btn.textContent = 'Pulling\u2026'; btn.disabled = true;
+  try {
+    const r = await fetch('/api/log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'fetch', databaseId: notionDbId }) });
+    if (!r.ok) {
+      let m = 'HTTP ' + r.status;
+      try { const j = await r.json(); m = j.error || m; if (j.detail) { try { m = JSON.parse(j.detail).message || j.detail; } catch (e) { m = j.detail; } } } catch (e) {}
+      toast('Notion: ' + m); return;
+    }
+    const data = await r.json();
+    const incoming = reconstructSessions(data.rows || []);
+    const byId = {}; sessions.forEach(s => { byId[s.id] = s; });
+    let added = 0;
+    incoming.forEach(s => { if (s.id && !(s.id in byId)) { byId[s.id] = s; added++; } });
+    sessions = Object.values(byId);
+    const have = new Set(customExercises.map(x => x.toLowerCase()));
+    incoming.forEach(s => s.exercises.forEach(ex => { if (ex.name && !have.has(ex.name.toLowerCase())) { customExercises.push(ex.name); have.add(ex.name.toLowerCase()); } }));
+    try { localStorage.setItem(EX_KEY, JSON.stringify(customExercises)); } catch (e) {}
+    persist(); monthsSeeded = false; renderHistory();
+    closeModal('settings-modal');
+    toast(added ? ('Pulled ' + added + ' workout' + (added !== 1 ? 's' : '') + ' from Notion') : 'Already up to date');
+  } catch (e) {
+    toast('Could not reach Notion');
+  } finally { btn.textContent = orig; btn.disabled = false; }
+}
+$('pull-btn').addEventListener('click', fetchFromNotion);
+
+/* ---------- Workout type tags ---------- */
+function loadTags() { try { const v = JSON.parse(localStorage.getItem(TAG_KEY)); customTags = Array.isArray(v) ? v.filter(x => typeof x === 'string') : []; } catch (e) { customTags = []; } }
+function allTagOptions() {
+  const out = [...PRESET_TAGS];
+  const have = new Set(out.map(t => t.toLowerCase()));
+  [...customTags, ...sessions.map(s => s.tag).filter(Boolean)].forEach(t => {
+    const k = (t || '').trim().toLowerCase();
+    if (k && !have.has(k)) { out.push(t.trim()); have.add(k); }
+  });
+  return out;
+}
+function renderTags() {
+  const box = $('tag-options'); if (!box) return;
+  box.innerHTML = allTagOptions().map(t =>
+    `<button type="button" class="tag-pill${t === draftTag ? ' active' : ''}" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</button>`
+  ).join('');
+  renderTemplateBar();
+  requestAnimationFrame(() => {
+    const tagRow = document.getElementById('tag-row');
+    const tagWrap = tagRow && tagRow.closest('.tag-row-wrap');
+    if (!tagRow || !tagWrap) return;
+    const atEnd = tagRow.scrollLeft + tagRow.clientWidth >= tagRow.scrollWidth - 4;
+    const atStart = tagRow.scrollLeft <= 4;
+    tagWrap.classList.toggle('at-end', atEnd);
+    tagWrap.classList.toggle('at-start', atStart);
+  });
+}
+$('tag-options').addEventListener('click', e => {
+  const b = e.target.closest('[data-tag]'); if (!b) return;
+  const t = b.dataset.tag;
+  draftTag = (draftTag === t) ? '' : t;   // tap again to deselect
+  renderTags(); renderTemplateBar(); saveDraft();
+});
+function showTagInput() { $('tag-add-btn').style.display='none'; const inp=$('tag-add'); inp.style.display=''; inp.focus(); }
+function hideTagInput() { $('tag-add').style.display='none'; $('tag-add-btn').style.display=''; }
+function addCustomTag() {
+  const inp = $('tag-add'); const name = inp.value.trim().replace(/\s+/g, ' ');
+  inp.value = ''; hideTagInput();
+  if (!name) return;
+  const existing = allTagOptions().find(t => t.toLowerCase() === name.toLowerCase());
+  const finalName = existing || name.replace(/\b\w/g, c => c.toUpperCase());
+  if (!existing) { customTags.push(finalName); try { localStorage.setItem(TAG_KEY, JSON.stringify(customTags)); } catch (e) {} }
+  draftTag = finalName; renderTags(); renderTemplateBar(); saveDraft();
+}
+$('tag-add-btn').addEventListener('click', showTagInput);
+$('tag-add').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addCustomTag(); } else if (e.key === 'Escape') { $('tag-add').value=''; hideTagInput(); } });
+$('tag-add').addEventListener('blur', () => setTimeout(addCustomTag, 120));
+
+/* ---------- Stats view ---------- */
+function allLoggedExerciseNames() {
+  const seen = new Map();
+  sessions.forEach(s => s.exercises.forEach(ex => {
+    const k = ex.name.trim().toLowerCase();
+    if (!seen.has(k)) seen.set(k, ex.name.trim());
+  }));
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+}
+// Is this exercise cardio? Decide from how it's been logged most recently.
+function exerciseIsCardio(name) {
+  const key = name.trim().toLowerCase();
+  const sorted = [...sessions].sort((a, b) => b.date.localeCompare(a.date));
+  for (const s of sorted) { const ex = s.exercises.find(e => e.name.trim().toLowerCase() === key); if (ex) return ex.type === 'cardio'; }
+  return false;
+}
+// Returns [{ key:'YYYY-MM', label:'Mon YYYY', top:Number }] for one exercise, chronological
+function monthlyTopWeight(name) {
+  const key = name.trim().toLowerCase();
+  const byMonth = {};
+  sessions.forEach(s => {
+    const ex = s.exercises.find(e => e.name.trim().toLowerCase() === key && e.type !== 'cardio');
+    if (!ex) return;
+    const top = ex.sets.reduce((m, st) => Math.max(m, Number(st.weight) || 0), 0);
+    const mk = s.date.slice(0, 7);
+    if (!(mk in byMonth) || top > byMonth[mk]) byMonth[mk] = top;
+  });
+  return Object.keys(byMonth).sort().map(mk => ({ key: mk, label: monthLabel(mk), top: byMonth[mk] }));
+}
+function buildStatSelect() {
+  const sel = $('stat-ex-select');
+  const names = allLoggedExerciseNames();
+  const prev = sel.value;
+  sel.innerHTML = names.length
+    ? names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('')
+    : '<option value="">No strength exercises logged yet</option>';
+  if (names.includes(prev)) sel.value = prev;
+}
+function chartSVG(data, H) {
+  if (!data.length) return '<div class="chart-empty">No data yet.</div>';
+  const W = 320; H = H || 180; const padL = 34, padR = 12, padT = 14, padB = 28;
+  const xs = W - padL - padR, ys = H - padT - padB;
+  const max = Math.max(...data.map(d => d.top));
+  const min = Math.min(...data.map(d => d.top));
+  const span = (max - min) || 1;
+  const niceMax = max + span * 0.15, niceMin = Math.max(0, min - span * 0.15);
+  const range = (niceMax - niceMin) || 1;
+  const n = data.length;
+  const uid = 'g' + Math.random().toString(36).slice(2, 7);
+  const px = i => padL + (n === 1 ? xs / 2 : (i / (n - 1)) * xs);
+  const py = v => padT + ys - ((v - niceMin) / range) * ys;
+
+  const pts = data.map((d, i) => `${px(i).toFixed(1)},${py(d.top).toFixed(1)}`);
+  const line = pts.map((p, i) => (i ? 'L' : 'M') + p).join(' ');
+  const area = `M${px(0).toFixed(1)},${(padT + ys).toFixed(1)} L` + pts.join(' L') + ` L${px(n - 1).toFixed(1)},${(padT + ys).toFixed(1)} Z`;
+
+  let grid = '';
+  for (let g = 0; g <= 2; g++) {
+    const v = niceMin + (range * g / 2);
+    const y = py(v).toFixed(1);
+    grid += `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="var(--line)" stroke-width="1"/>`;
+    grid += `<text x="${padL - 6}" y="${(+y + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--muted)">${Math.round(v)}</text>`;
+  }
+  const showIdx = n <= 4 ? data.map((_, i) => i) : [0, Math.floor((n - 1) / 2), n - 1];
+  let xlabels = '';
+  showIdx.forEach(i => {
+    const short = data[i].label.replace(/ \d{4}$/, m => " '" + m.trim().slice(-2));
+    xlabels += `<text x="${px(i).toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="9" fill="var(--muted)">${short}</text>`;
+  });
+  const dots = data.map((d, i) => `<circle cx="${px(i).toFixed(1)}" cy="${py(d.top).toFixed(1)}" r="3.5" fill="var(--green-ink)"/>`).join('');
+
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">` +
+    `<defs><linearGradient id="${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--green-ink)" stop-opacity=".16"/><stop offset="100%" stop-color="var(--green-ink)" stop-opacity="0"/></linearGradient></defs>` +
+    grid + `<path d="${area}" fill="url(#${uid})"/>` +
+    `<path d="${line}" fill="none" stroke="var(--green-ink)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>` +
+    dots + xlabels + `</svg>`;
+}
+function statTable(data, unit) {
+  unit = unit || 'kg';
+  const rev = [...data].reverse();
+  return rev.map((d, i) => {
+    const older = rev[i + 1];
+    let delta = '';
+    if (older) { const diff = +(d.top - older.top).toFixed(1); if (diff !== 0) delta = `<span class="stat-delta ${diff > 0 ? 'up' : 'down'}">${diff > 0 ? '+' : ''}${diff}${unit}</span>`; }
+    return `<div class="stat-table-row"><span class="m">${d.label}</span><span><span class="v">${d.top}${unit}</span>${delta}</span></div>`;
+  }).join('');
+}
+function renderStatChart() {
+  const name = $('stat-ex-select').value;
+  const chart = $('stat-chart'), tableEl = $('stat-table');
+  if (!name) { chart.innerHTML = '<div class="chart-empty">Log some workouts to see progress here.</div>'; tableEl.innerHTML = ''; return; }
+  if (exerciseIsCardio(name)) {
+    const rows = monthlyCardio(name);
+    if (!rows.length) { chart.innerHTML = '<div class="chart-empty">No data for this exercise yet.</div>'; tableEl.innerHTML = ''; return; }
+    const pace = cardioSeries(rows, 'avgPace');
+    const dur = cardioSeries(rows, 'avgMins');
+    let c = '';
+    if (pace.length) c += `<div class="tpl-ex-sub">Avg pace \u00b7 min/km (lower is faster)</div>${chartSVG(pace, 160)}`;
+    if (dur.length) c += `<div class="tpl-ex-sub" style="margin-top:16px">Avg time per set \u00b7 min</div>${chartSVG(dur, 160)}`;
+    chart.innerHTML = c;
+    // context table newest-first: pace, avg duration, sessions, total distance
+    const rev = [...rows].reverse();
+    tableEl.innerHTML = '<div style="margin-top:14px">' + rev.map(r => {
+      const paceTxt = r.avgPace != null ? `${paceLabel(r.avgPace)}/km` : '\u2014';
+      const distTxt = r.totalKm > 0 ? ` \u00b7 ${r.totalKm}km` : '';
+      return `<div class="stat-table-row"><span class="m">${r.label}</span><span><span class="v">${paceTxt}</span><span class="stat-delta" style="color:var(--muted)"> ${fmtDuration(r.avgMins)} avg/set \u00b7 ${r.sessions} session${r.sessions !== 1 ? 's' : ''}${distTxt}</span></span></div>`;
+    }).join('') + '</div>';
+    return;
+  }
+  const data = monthlyTopWeight(name);
+  if (!data.length) { chart.innerHTML = '<div class="chart-empty">No data for this exercise yet.</div>'; tableEl.innerHTML = ''; return; }
+  chart.innerHTML = chartSVG(data);
+  tableEl.innerHTML = statTable(data);
+}
+$('stat-ex-select').addEventListener('change', renderStatChart);
+
+/* ---------- Stats: template overview ---------- */
+function buildTplSelect() {
+  const sel = $('stat-tpl-select');
+  const keys = Object.keys(templates).filter(k => (templates[k] || []).length);
+  const prev = sel.value;
+  if (!keys.length) { sel.innerHTML = '<option value="">No templates saved yet</option>'; return; }
+  // display name: match a known tag spelling if possible, else capitalise
+  const disp = k => (allTagOptions().find(t => t.toLowerCase() === k) || k.replace(/\b\w/g, c => c.toUpperCase()));
+  sel.innerHTML = keys.sort().map(k => `<option value="${escapeHtml(k)}">${escapeHtml(disp(k))}</option>`).join('');
+  if (keys.includes(prev)) sel.value = prev;
+}
+function renderTemplateStats() {
+  const key = $('stat-tpl-select').value;
+  const box = $('stat-tpl-charts');
+  const tpl = key ? (templates[key] || []) : [];
+  if (!tpl.length) { box.innerHTML = '<div class="card"><div class="chart-empty">No templates saved yet. Save one from the log screen first.</div></div>'; return; }
+  let html = '';
+  tpl.forEach(item => {
+    const name = (typeof item === 'string') ? item : (item && item.name);
+    if (!name) return;
+    if (exerciseIsCardio(name)) {
+      const rows = monthlyCardio(name);
+      const pace = cardioSeries(rows, 'avgPace');
+      const dur = cardioSeries(rows, 'avgMins');
+      const latest = rows.length ? rows[rows.length - 1] : null;
+      let inner = '';
+      if (pace.length) inner += `<div class="tpl-ex-sub" style="margin-top:6px">Avg pace (min/km)</div>${chartSVG(pace, 150)}`;
+      if (dur.length) inner += `<div class="tpl-ex-sub" style="margin-top:10px">Avg time per set (min)</div>${chartSVG(dur, 150)}`;
+      if (!inner) inner = '<div class="chart-empty">No data yet.</div>';
+      const sub = latest
+        ? `Latest: <b>${fmtDuration(latest.avgMins)} avg/set</b>${latest.avgPace != null ? ` \u00b7 ${paceLabel(latest.avgPace)}/km` : ''} (${latest.label})`
+        : 'No data logged yet';
+      html += `<div class="card tpl-ex-block">
+        <div class="tpl-ex-title">${escapeHtml(name)}</div>
+        <div class="tpl-ex-sub">${sub}</div>
+        ${inner}
+      </div>`;
+      return;
+    }
+    const data = monthlyTopWeight(name);
+    const latest = data.length ? data[data.length - 1] : null;
+    html += `<div class="card tpl-ex-block">
+      <div class="tpl-ex-title">${escapeHtml(name)}</div>
+      <div class="tpl-ex-sub">${latest ? `Latest top: <b>${latest.top}kg</b> (${latest.label})` : 'No data logged yet'}</div>
+      ${data.length ? chartSVG(data, 150) : '<div class="chart-empty">No data yet.</div>'}
+    </div>`;
+  });
+  box.innerHTML = html;
+}
+$('stat-tpl-select').addEventListener('change', renderTemplateStats);
+
+function cardioExerciseNames() {
+  const seen = new Map();
+  sessions.forEach(s => s.exercises.forEach(ex => {
+    if (ex.type !== 'cardio') return;
+    const k = ex.name.trim().toLowerCase();
+    if (!seen.has(k)) seen.set(k, ex.name.trim());
+  }));
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+}
+// monthly best for a cardio metric: 'mins' (max minutes in a session) or 'km' (max distance)
+// Per month: average time PER SET, average pace per set (min/km), totals, session count.
+// Each set is treated as one cardio effort — e.g. three 5-min intervals average to 5 min, not 15.
+function monthlyCardio(name) {
+  const key = name.trim().toLowerCase();
+  const byMonth = {};
+  sessions.forEach(s => {
+    const ex = s.exercises.find(e => e.name.trim().toLowerCase() === key && e.type === 'cardio');
+    if (!ex) return;
+    const mk = s.date.slice(0, 7);
+    let sessionHasData = false;
+    ex.sets.forEach(st => {
+      const mins = parseMins(st.mins);
+      const km = Number(st.km) || 0;
+      if (mins <= 0 && km <= 0) return;   // ignore empty sets
+      const m = byMonth[mk] || (byMonth[mk] = { sessions: 0, sets: 0, mins: 0, km: 0, paceSum: 0, paceN: 0 });
+      m.sets++; m.mins += mins; m.km += km;
+      if (mins > 0 && km > 0) { m.paceSum += mins / km; m.paceN++; }   // pace per this set
+      sessionHasData = true;
+    });
+    if (sessionHasData) byMonth[mk].sessions++;
+  });
+  return Object.keys(byMonth).sort().map(mk => {
+    const m = byMonth[mk];
+    return {
+      key: mk, label: monthLabel(mk),
+      sessions: m.sessions,
+      sets: m.sets,
+      avgMins: +(m.mins / m.sets).toFixed(2),   // average time per set (decimal minutes)
+      totalMins: Math.round(m.mins),
+      totalKm: +m.km.toFixed(1),
+      avgPace: m.paceN ? +(m.paceSum / m.paceN).toFixed(2) : null   // min/km, averaged per set
+    };
+  });
+}
+function paceLabel(p) {
+  const totalSeconds = Math.round(p * 60);
+  return Math.floor(totalSeconds / 60) + ':' + String(totalSeconds % 60).padStart(2, '0');
+}
+// Build chart-ready series (chartSVG expects {label, top})
+function cardioSeries(rows, field) { return rows.filter(r => r[field] != null).map(r => ({ key: r.key, label: r.label, top: r[field] })); }
+function renderCardioStatsUnused() {} // removed: cardio now folded into the exercise view
+let statMode = 'exercise';
+function setStatMode(mode) {
+  statMode = mode;
+  document.querySelectorAll('.stat-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  $('stat-exercise-pane').style.display = mode === 'exercise' ? '' : 'none';
+  $('stat-template-pane').style.display = mode === 'template' ? '' : 'none';
+  if (mode === 'exercise') { buildStatSelect(); renderStatChart(); }
+  else { buildTplSelect(); renderTemplateStats(); }
+}
+document.querySelectorAll('.stat-mode-btn').forEach(b => b.addEventListener('click', () => setStatMode(b.dataset.mode)));
+
+let statsOpen = false;
+function setView(stats) {
+  statsOpen = stats;
+  $('log-view').style.display = stats ? 'none' : '';
+  $('stats-view').style.display = stats ? '' : 'none';
+  $('view-toggle').classList.toggle('active', stats);
+  $('log-tab').classList.toggle('active', !stats);
+  if (stats) { $('view-toggle').setAttribute('aria-current', 'page'); $('log-tab').removeAttribute('aria-current'); }
+  else { $('log-tab').setAttribute('aria-current', 'page'); $('view-toggle').removeAttribute('aria-current'); }
+  if (stats) { setStatMode(statMode); }
+  window.scrollTo({ top: 0 });
+}
+$('view-toggle').addEventListener('click', () => setView(true));
+$('log-tab').addEventListener('click', () => setView(false));
+const THEME_KEY = 'rep-log-theme';
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  $('theme-toggle').setAttribute('aria-label', theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+  $('theme-toggle').title = theme === 'dark' ? 'Light mode' : 'Dark mode';
+  document.querySelector('meta[name="theme-color"]').content = theme === 'dark' ? '#101011' : '#fafaf9';
+}
+let savedTheme = '';
+try { savedTheme = localStorage.getItem(THEME_KEY) || ''; } catch (e) {}
+applyTheme(savedTheme === 'light' || savedTheme === 'dark'
+  ? savedTheme : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+$('theme-toggle').addEventListener('click', () => {
+  const theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  applyTheme(theme);
+  try { localStorage.setItem(THEME_KEY, theme); } catch (e) {}
+});
+
+/* ---------- One-time migration: tidy lowercase exercise names ---------- */
+function migrateExerciseCasing() {
+  const MIG_KEY = 'iron-log-casing-migrated';
+  try { if (localStorage.getItem(MIG_KEY)) return; } catch (e) { return; }
+  const titled = s => s.trim().replace(/\s+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  // Only touch names that are entirely lowercase (won't disturb acronyms like RDL or HIIT)
+  const fix = s => (s && s === s.toLowerCase() && /[a-z]/.test(s)) ? titled(s) : s;
+  let changed = false;
+  sessions.forEach(s => s.exercises.forEach(ex => { const f = fix(ex.name); if (f !== ex.name) { ex.name = f; changed = true; } }));
+  customExercises = customExercises.map(n => { const f = fix(n); if (f !== n) changed = true; return f; });
+  cardioNames = cardioNames.map(n => { const f = fix(n); if (f !== n) changed = true; return f; });
+  if (changed) {
+    persist();
+    try { localStorage.setItem(EX_KEY, JSON.stringify(customExercises)); } catch (e) {}
+    try { localStorage.setItem(CARDIO_KEY, JSON.stringify(cardioNames)); } catch (e) {}
+  }
+  try { localStorage.setItem(MIG_KEY, '1'); } catch (e) {}
+}
+
+/* ---------- Init ---------- */
+(function init(){
+  $('session-date').value = localToday();
+  loadSessions(); loadExercises(); loadTags(); loadTemplates(); loadCardio(); loadHidden(); loadDbId();
+  migrateExerciseCasing();
+  loadDraft();   // bring back any unsaved in-progress workout
+  // If we were mid-edit of an existing workout, restore that mode's UI.
+  if (editingId) {
+    $('form-title').textContent = 'Edit workout';
+    $('save-btn').textContent = 'UPDATE WORKOUT';
+    $('cancel-edit-btn').style.display = '';
+  }
+  renderDraft(); renderTags(); renderHistory();
+  if (draftExercises.length) toast('Picked up where you left off');
+
+  const tagRow = document.getElementById('tag-row');
+  const tagWrap = tagRow && tagRow.closest('.tag-row-wrap');
+  function updateTagFade() {
+    if (!tagRow || !tagWrap) return;
+    const atEnd = tagRow.scrollLeft + tagRow.clientWidth >= tagRow.scrollWidth - 4;
+    const atStart = tagRow.scrollLeft <= 4;
+    tagWrap.classList.toggle('at-end', atEnd);
+    tagWrap.classList.toggle('at-start', atStart);
+  }
+  if (tagRow) { tagRow.addEventListener('scroll', updateTagFade, { passive: true }); }
+  setTimeout(updateTagFade, 100);
+})();
+</script>
+</body>
+</html>
