@@ -114,6 +114,24 @@ export default async function handler(req, res) {
   const num = v => Number(v) || 0;
   let created = 0;
   const ids = [];
+  // If Notion rejects a later set, attempt to remove rows created earlier
+  // during this request before reporting the failure.
+  async function rollbackCreatedRows() {
+    for (const id of ids) {
+      try {
+        const rollback = await fetch('https://api.notion.com/v1/pages/' + id, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${TOKEN}`,
+            'Notion-Version': '2022-06-28',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ archived: true }),
+        });
+        if (!rollback.ok) console.error('Notion rollback rejected', id, rollback.status);
+      } catch (e) { console.error('Notion rollback failed', id, e); }
+    }
+  }
 
   try {
     for (const ex of exercises) {
@@ -154,6 +172,7 @@ export default async function handler(req, res) {
         if (!resp.ok) {
           const detail = await resp.text();
           console.error('Notion error', resp.status, detail);
+          await rollbackCreatedRows();
           res.status(502).json({ error: 'Notion rejected the request', detail, createdSoFar: created });
           return;
         }
@@ -164,6 +183,7 @@ export default async function handler(req, res) {
 
     res.status(200).json({ ok: true, created, ids });
   } catch (e) {
+    await rollbackCreatedRows();
     res.status(500).json({ error: 'Sync failed', detail: String(e) });
   }
 }

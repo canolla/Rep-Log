@@ -32,7 +32,10 @@
   </header>
   <div id="log-view">
   <div class="statbar fade-in" style="animation-delay:.03s">
-    <div class="stat"><div class="num" id="stat-sessions">0</div><div class="lbl">This week's sessions</div></div>
+    <div class="stat weekly-stat">
+      <div class="num"><span id="stat-sessions">0</span><span class="weekly-out-of" id="stat-target"> / 4</span></div>
+      <div class="lbl">This week's workouts</div>
+    </div>
     <div class="stat"><div class="num" id="stat-gain">–</div><div class="lbl" id="stat-gain-lbl">Top monthly gain</div></div>
   </div>
 
@@ -87,11 +90,34 @@
   <div id="stats-view" style="display:none">
     <div class="sec-title">Progress</div>
     <div class="stat-mode">
-      <button type="button" class="stat-mode-btn active" data-mode="exercise">By exercise</button>
-      <button type="button" class="stat-mode-btn" data-mode="template">By template</button>
+      <button type="button" class="stat-mode-btn active" data-mode="attendance" aria-pressed="true">Attendance</button>
+      <button type="button" class="stat-mode-btn" data-mode="exercise" aria-pressed="false">By exercise</button>
+      <button type="button" class="stat-mode-btn" data-mode="template" aria-pressed="false">By template</button>
     </div>
 
-    <div class="card" id="stat-exercise-pane">
+    <div class="card" id="stat-attendance-pane">
+      <div class="attendance-heading">
+        <h2 id="attendance-title">Monthly attendance</h2>
+        <div class="weekly-target-control"><label for="weekly-target">Target</label><input id="weekly-target" type="number" min="1" max="14" step="1" inputmode="numeric" value="4" aria-label="Weekly workout target" aria-describedby="weekly-target-error"><span>/ week</span></div>
+      </div>
+      <div id="weekly-target-error" class="goal-error" role="alert"></div>
+      <p id="attendance-summary" class="attendance-summary" aria-live="polite"></p>
+      <div id="attendance-month-view">
+        <div class="attendance-period"><span id="attendance-range" aria-live="polite"></span><div><button type="button" class="btn-mini" id="attendance-older" aria-label="Show earlier twelve months">←</button><button type="button" class="btn-mini" id="attendance-newer" aria-label="Show more recent twelve months" disabled>→</button></div></div>
+        <div id="attendance-months" class="attendance-months"></div>
+        <p class="attendance-note">Weekly averages include days without workouts. Current month uses days so far.</p>
+      </div>
+      <div id="attendance-detail-view" hidden>
+      <button type="button" class="attendance-back" id="attendance-back">← All months</button>
+      <table class="attendance-table" aria-label="Weekly workout attendance within the selected month, Monday to Sunday">
+        <thead><tr><th scope="col">Week of</th><th scope="col" aria-label="Monday">M</th><th scope="col" aria-label="Tuesday">T</th><th scope="col" aria-label="Wednesday">W</th><th scope="col" aria-label="Thursday">T</th><th scope="col" aria-label="Friday">F</th><th scope="col" aria-label="Saturday">S</th><th scope="col" aria-label="Sunday">S</th><th scope="col">Total</th></tr></thead>
+        <tbody id="attendance-rows"></tbody>
+      </table>
+      <p class="attendance-note">Week totals include only this month’s days.</p>
+      </div>
+    </div>
+
+    <div class="card" id="stat-exercise-pane" style="display:none">
       <label>Exercise (strength or cardio)</label>
       <div class="combo">
         <select id="stat-ex-select" class="stat-select"></select>
@@ -153,11 +179,26 @@
   </div>
 </div>
 <div class="toast" id="toast"></div>
+<aside id="workout-success" class="workout-success" hidden aria-label="Workout saved">
+  <div class="success-confetti" id="success-confetti" aria-hidden="true"></div>
+  <div role="status" aria-live="polite" aria-atomic="true">
+    <div class="success-message" id="success-message"></div>
+    <div class="goal-dots success-dots" id="success-dots" aria-hidden="true"></div>
+    <div class="success-detail" id="success-detail"></div>
+  </div>
+  <div id="success-sync" class="success-sync"></div>
+</aside>
 
 <script>
 const STORE_KEY = 'iron-log-sessions';
 const DB_KEY = 'iron-log-db';
 const DRAFT_KEY = 'iron-log-draft';   // in-progress (unsaved) workout, so closing the app mid-workout doesn't lose it
+const WEEKLY_TARGET_KEY = 'rep-log-weekly-target';
+let weeklyTarget = 4;
+let attendanceOffset = 0;
+let attendanceMonth = null;
+let workoutSuccessTimer = null;
+let workoutSuccessFadeTimer = null;
 let notionDbId = '';
 let sessions = [];
 let draftExercises = [];
@@ -201,8 +242,8 @@ function validSession(s) {
       ex.sets.every(set => set && typeof set === 'object' && !Array.isArray(set)));
 }
 function persist() {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(sessions)); }
-  catch (e) { toast('Could not save — storage full or blocked'); }
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(sessions)); return true; }
+  catch (e) { toast('Could not save — storage full or blocked'); return false; }
 }
 
 // ---- In-progress workout autosave ----
@@ -534,6 +575,210 @@ function startOfWeek(d) {
   x.setDate(x.getDate() - monday);
   return x;
 }
+function workoutsInWeek(date = new Date()) {
+  const start = startOfWeek(date);
+  const end = new Date(start); end.setDate(end.getDate() + 7);
+  return sessions.filter(s => { const day = new Date(s.date + 'T00:00:00'); return day >= start && day < end; });
+}
+function validWeeklyTarget(value) { return Number.isInteger(value) && value >= 1 && value <= 14; }
+function loadWeeklyTarget() {
+  try { const value = Number(localStorage.getItem(WEEKLY_TARGET_KEY)); if (validWeeklyTarget(value)) weeklyTarget = value; } catch (e) {}
+}
+function renderGoalDots(element, count, target, animate = false) {
+  element.replaceChildren();
+  for (let i = 0; i < Math.max(target, count); i++) {
+    const dot = document.createElement('span');
+    dot.className = 'goal-dot' + (i < count ? ' filled' : '') + (i >= target ? ' extra' : '') + (animate && i === count - 1 ? ' just-filled' : '');
+    element.appendChild(dot);
+  }
+  element.setAttribute('aria-label', count + ' of ' + target + ' workouts');
+}
+function ordinal(number) {
+  const lastTwo = number % 100;
+  return number + (lastTwo >= 11 && lastTwo <= 13 ? 'th' : ({1:'st',2:'nd',3:'rd'}[number % 10] || 'th'));
+}
+function dismissWorkoutSuccess() {
+  clearTimeout(workoutSuccessTimer);
+  clearTimeout(workoutSuccessFadeTimer);
+  $('workout-success').hidden = true;
+  $('workout-success').classList.remove('fading');
+  $('success-confetti').replaceChildren();
+}
+function scheduleSuccessDismissal() {
+  clearTimeout(workoutSuccessTimer);
+  clearTimeout(workoutSuccessFadeTimer);
+  if (!$('workout-success').hidden) workoutSuccessTimer = setTimeout(() => {
+    $('workout-success').classList.add('fading');
+    workoutSuccessFadeTimer = setTimeout(dismissWorkoutSuccess, 350);
+  }, 4000);
+}
+function celebrateGoal() {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const layer = $('success-confetti');
+  const dot = $('success-dots').lastElementChild;
+  if (!dot) return;
+  const bounds = layer.getBoundingClientRect(), anchor = dot.getBoundingClientRect();
+  for (let i = 0; i < 26; i++) {
+    const piece = document.createElement('span'); piece.className = 'confetti-piece';
+    const angle = Math.PI + (i / 25) * Math.PI;
+    const distance = 30 + Math.random() * 65;
+    piece.style.left = (anchor.left - bounds.left + anchor.width / 2) + 'px';
+    piece.style.top = (anchor.top - bounds.top + anchor.height / 2) + 'px';
+    piece.style.setProperty('--confetti-x', Math.cos(angle) * distance + 'px');
+    piece.style.setProperty('--confetti-y', Math.sin(angle) * distance + 'px');
+    piece.style.setProperty('--confetti-turn', (Math.random() * 500 - 250) + 'deg');
+    piece.style.animationDelay = (Math.random() * 130) + 'ms';
+    piece.addEventListener('animationend', () => piece.remove(), { once:true });
+    layer.appendChild(piece);
+  }
+}
+function showWorkoutSuccess(session) {
+  dismissWorkoutSuccess();
+  const date = new Date(session.date + 'T00:00:00');
+  const count = workoutsInWeek(date).length;
+  const current = startOfWeek(date).getTime() === startOfWeek(new Date()).getTime();
+  const weekLabel = current ? 'this week' : 'for the week of ' + startOfWeek(date).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
+  const panel = $('workout-success');
+  panel.dataset.sessionId = session.id;
+  $('success-message').textContent = 'You logged your ' + ordinal(count) + ' workout ' + weekLabel + '!';
+  $('success-detail').textContent = count > weeklyTarget
+    ? count + ' workouts · ' + (count - weeklyTarget) + ' beyond your target'
+    : count + ' of ' + weeklyTarget + ' workouts' + (count === weeklyTarget ? ' · Weekly target reached' : '');
+  $('success-sync').textContent = notionDbId ? 'Saved on this device · Syncing…' : '';
+  renderGoalDots($('success-dots'), count, weeklyTarget, true);
+  $('success-confetti').replaceChildren();
+  $('toast').classList.remove('show');
+  panel.hidden = false;
+  if (count === weeklyTarget) celebrateGoal();
+  scheduleSuccessDismissal();
+}
+['pointerdown', 'focusin'].forEach(type => document.addEventListener(type, event => {
+  const panel = $('workout-success');
+  if (!panel.hidden && !panel.contains(event.target)) dismissWorkoutSuccess();
+}));
+document.addEventListener('keydown', event => { if (event.key === 'Escape' && !$('workout-success').hidden) dismissWorkoutSuccess(); });
+$('weekly-target').addEventListener('change', () => {
+  const input = $('weekly-target'), value = Number(input.value);
+  if (!validWeeklyTarget(value)) {
+    $('weekly-target-error').textContent = 'Choose a whole number from 1 to 14.';
+    input.setAttribute('aria-invalid', 'true'); return;
+  }
+  try { localStorage.setItem(WEEKLY_TARGET_KEY, String(value)); }
+  catch (e) { $('weekly-target-error').textContent = 'Could not save your target. Try again.'; return; }
+  weeklyTarget = value;
+  input.removeAttribute('aria-invalid'); $('weekly-target-error').textContent = '';
+  dismissWorkoutSuccess(); renderStats();
+});
+$('weekly-target').addEventListener('keydown', event => { if (event.key === 'Enter') event.target.blur(); });
+function localDateKey(date) {
+  return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+}
+function monthlyAttendance(key, today = new Date()) {
+  const [year, month] = key.split('-').map(Number);
+  const start = new Date(year, month - 1, 1), end = new Date(year, month, 0);
+  const current = key === ymOfDate(today);
+  const elapsedDays = key > ymOfDate(today) ? 0 : current ? today.getDate() : end.getDate();
+  const cutoff = elapsedDays ? new Date(year, month - 1, elapsedDays) : null;
+  const entries = cutoff ? sessions.filter(s => s.date >= localDateKey(start) && s.date <= localDateKey(cutoff)) : [];
+  return { key, start, end, cutoff, elapsedDays, current, entries, count:entries.length, average:elapsedDays ? entries.length * 7 / elapsedDays : 0 };
+}
+function attendanceMonths(offset = 0, today = new Date()) {
+  const current = ymOfDate(today);
+  const earliest = sessions.reduce((oldest, s) => s.date.slice(0, 7) < oldest ? s.date.slice(0, 7) : oldest, current);
+  const months = [];
+  for (let i = 0; i < 12; i++) {
+    const date = new Date(today.getFullYear(), today.getMonth() - offset - i, 1);
+    const key = ymOfDate(date);
+    if (key < earliest) break;
+    months.push(monthlyAttendance(key, today));
+  }
+  return months;
+}
+function attendanceMonthWeeks(key, today = new Date()) {
+  const month = monthlyAttendance(key, today), daily = new Map();
+  month.entries.forEach(session => daily.set(session.date, (daily.get(session.date) || 0) + 1));
+  const weeks = [], current = startOfWeek(today);
+  for (let cursor = startOfWeek(month.start); cursor <= month.end; cursor.setDate(cursor.getDate() + 7)) {
+    const start = new Date(cursor);
+    const days = Array.from({ length:7 }, (_, day) => {
+      const date = new Date(start); date.setDate(date.getDate() + day);
+      const dateKey = localDateKey(date), outside = ymOfDate(date) !== key;
+      return { date, key:dateKey, outside, future:dateKey > localDateKey(today), count:outside ? 0 : daily.get(dateKey) || 0 };
+    });
+    weeks.push({ start, key:localDateKey(start), days, count:days.reduce((total, day) => total + day.count, 0), current:start.getTime() === current.getTime() });
+  }
+  return weeks;
+}
+function renderAttendanceDetail() {
+  const month = monthlyAttendance(attendanceMonth);
+  $('attendance-title').textContent = monthLabel(attendanceMonth);
+  $('attendance-summary').textContent = month.count + ' workout' + (month.count === 1 ? '' : 's') + ' · ' + month.average.toFixed(1) + ' / week' + (month.current ? ' · Month to date' : '');
+  const format = date => date.toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
+  const body = $('attendance-rows'); body.replaceChildren();
+  attendanceMonthWeeks(attendanceMonth).forEach(week => {
+    const row = document.createElement('tr');
+    if (week.current) row.className = 'attendance-current';
+    const label = document.createElement('th'); label.scope = 'row';
+    label.textContent = week.start.toLocaleDateString(undefined, { month:'short', day:'numeric' });
+    label.setAttribute('aria-label', (week.current ? 'This week, ' : 'Week of ') + format(week.start));
+    row.appendChild(label);
+    week.days.forEach(day => {
+      const cell = document.createElement('td');
+      const detail = format(day.date) + (day.outside ? ': outside this month' : ': ' + day.count + ' workout' + (day.count === 1 ? '' : 's'));
+      cell.setAttribute('aria-label', detail); cell.title = detail;
+      if (day.outside) { row.appendChild(cell); return; }
+      const dot = document.createElement('span');
+      dot.className = 'attendance-day' + (day.count ? ' attended' : '') + (day.future && !day.count ? ' upcoming' : '');
+      dot.setAttribute('aria-hidden', 'true');
+      if (day.count > 1) dot.textContent = day.count;
+      cell.appendChild(dot); row.appendChild(cell);
+    });
+    const total = document.createElement('td'); total.className = 'attendance-total';
+    total.textContent = week.count; row.appendChild(total); body.appendChild(row);
+  });
+}
+function renderAttendance() {
+  $('attendance-month-view').hidden = attendanceMonth !== null;
+  $('attendance-detail-view').hidden = attendanceMonth === null;
+  if (attendanceMonth) { renderAttendanceDetail(); return; }
+  let months = attendanceMonths(attendanceOffset);
+  if (!months.length) { attendanceOffset = 0; months = attendanceMonths(); }
+  $('attendance-title').textContent = 'Monthly attendance';
+  const current = workoutsInWeek();
+  $('attendance-summary').textContent = current.length + ' / ' + weeklyTarget + ' workouts this week';
+  const newest = months[0], oldest = months[months.length - 1];
+  $('attendance-range').textContent = oldest.key === newest.key ? monthLabel(newest.key) : monthLabel(oldest.key) + ' – ' + monthLabel(newest.key);
+  $('attendance-older').disabled = !sessions.some(s => s.date.slice(0, 7) < oldest.key);
+  $('attendance-newer').disabled = attendanceOffset === 0;
+  const list = $('attendance-months'); list.replaceChildren();
+  months.forEach((month, index) => {
+    const daysTrained = new Set(month.entries.map(session => session.date)).size;
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'attendance-month-card' + (index === 0 ? ' featured' : '') + (month.current ? ' current' : ''); button.dataset.month = month.key;
+    button.setAttribute('aria-label', monthLabel(month.key) + ', ' + month.average.toFixed(1) + ' workouts per week, ' + month.count + ' workouts, ' + daysTrained + ' days trained' + (month.current ? ', month to date' : '') + '. Open weekly detail');
+    const label = document.createElement('span'); label.className = 'attendance-month-label';
+    const name = document.createElement('span'); name.textContent = monthLabel(month.key); label.appendChild(name);
+    if (month.current) { const status = document.createElement('small'); status.textContent = 'Month to date'; label.appendChild(status); }
+    const average = document.createElement('span'); average.className = 'attendance-average';
+    const value = document.createElement('strong'); value.textContent = month.average.toFixed(1); average.appendChild(value);
+    const unit = document.createElement('small'); unit.textContent = 'Avg. workouts / week'; average.appendChild(unit);
+    const metrics = document.createElement('span'); metrics.className = 'attendance-month-metrics';
+    [[month.count, month.count === 1 ? 'Workout' : 'Workouts'], [daysTrained, daysTrained === 1 ? 'Day trained' : 'Days trained']].forEach(([count, title]) => {
+      const metric = document.createElement('span'), number = document.createElement('strong'), caption = document.createElement('small');
+      number.textContent = count; caption.textContent = title; metric.appendChild(number); metric.appendChild(caption); metrics.appendChild(metric);
+    });
+    const arrow = document.createElement('span'); arrow.className = 'attendance-month-arrow'; arrow.textContent = '›'; arrow.setAttribute('aria-hidden', 'true');
+    button.appendChild(label); button.appendChild(average); button.appendChild(metrics); button.appendChild(arrow);
+    button.addEventListener('click', () => { attendanceMonth = month.key; renderAttendance(); $('attendance-back').focus({ preventScroll:true }); });
+    list.appendChild(button);
+  });
+}
+$('attendance-back').addEventListener('click', () => {
+  const month = attendanceMonth; attendanceMonth = null; renderAttendance();
+  const button = $('attendance-months').querySelector('[data-month="' + month + '"]');
+  if (button) button.focus({ preventScroll:true });
+});
+$('attendance-older').addEventListener('click', () => { attendanceOffset += 12; renderAttendance(); });
+$('attendance-newer').addEventListener('click', () => { attendanceOffset = Math.max(0, attendanceOffset - 12); renderAttendance(); });
 function topWeightByExercise(wk) {
   const m = new Map();
   wk.forEach(s => s.exercises.forEach(ex => {
@@ -556,10 +801,13 @@ function topGain(curSessions, prevSessions) {
   return best;
 }
 function renderStats() {
-  const thisStart = startOfWeek(new Date());
-  const nextStart = new Date(thisStart); nextStart.setDate(nextStart.getDate() + 7);
-  const within = (iso, a, b) => { const t = new Date(iso + 'T00:00:00'); return t >= a && t < b; };
-  $('stat-sessions').textContent = sessions.filter(s => within(s.date, thisStart, nextStart)).length;
+  const count = workoutsInWeek().length;
+  $('stat-sessions').textContent = count;
+  $('stat-target').textContent = ' / ' + weeklyTarget;
+  $('weekly-target').value = weeklyTarget;
+  $('weekly-target').removeAttribute('aria-invalid');
+  $('weekly-target-error').textContent = '';
+  renderAttendance();
 
   const thisM = ymOfDate(new Date());
   const best = topGain(sessionsInMonth(thisM), sessionsInMonth(prevMonthKey(thisM)));
@@ -925,7 +1173,7 @@ function editSession(s) {
 function localToday() { const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 $('session-date').addEventListener('change', saveDraft);
 function setTodayDate() { if (!editingId) $('session-date').value = localToday(); }
-document.addEventListener('visibilitychange', () => { if (!document.hidden && !editingId && !draftExercises.length) setTodayDate(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { renderStats(); if (!editingId && !draftExercises.length) setTodayDate(); } });
 // Flush the in-progress workout immediately when the app is backgrounded or closed,
 // in case a debounced keystroke save hasn't fired yet (common on mobile).
 document.addEventListener('visibilitychange', () => { if (document.hidden) { clearTimeout(_draftSaveTimer); saveDraft(); } });
@@ -967,7 +1215,8 @@ $('save-btn').addEventListener('click', async ()=>{
     // so a casing/spelling fix sticks instead of reverting to an old spelling.
     const updated = { ...old, date: $('session-date').value, exercises: cleaned, tag: draftTag || undefined, synced: false };
     sessions[idx] = updated;
-    persist(); renderHistory(); exitEdit(); toast('Workout updated');
+    if (!persist()) { sessions[idx] = old; return; }
+    dismissWorkoutSuccess(); renderHistory(); exitEdit(); toast('Workout updated');
     if (notionDbId) {
       const res = await syncSession(updated);
       const synced = await finishSync(updated, res);
@@ -979,29 +1228,21 @@ $('save-btn').addEventListener('click', async ()=>{
 
   cleaned.forEach(ex => { ex.name = canonicalName(ex.name) || ex.name; });
 
-  const savedDraft = { exercises: JSON.parse(JSON.stringify(cleaned)), tag: draftTag || '', date: $('session-date').value };
   const session = { id:'w'+Date.now(), date:$('session-date').value, exercises:cleaned, tag: draftTag || undefined, createdAt:Date.now(), synced:false };
-  sessions.push(session); persist(); draftExercises = []; draftTag = ''; setTodayDate(); renderDraft(); renderTags(); renderHistory();
+  sessions.push(session);
+  if (!persist()) { sessions.pop(); return; }
+  draftExercises = []; draftTag = ''; setTodayDate(); renderDraft(); renderTags(); renderHistory();
 
-  const undoSave = () => {
-    if (session.notionPageIds && session.notionPageIds.length) archiveNotion(session.notionPageIds, true);
-    sessions = sessions.filter(x => x.id !== session.id); persist();
-    draftExercises = JSON.parse(JSON.stringify(savedDraft.exercises));   // bring the workout back into the form
-    draftTag = savedDraft.tag;
-    $('session-date').value = savedDraft.date;
-    renderDraft(); renderTags(); renderHistory();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    toast('Workout restored');
-  };
+  showWorkoutSuccess(session);
 
   if (notionDbId) {
     const res = await syncSession(session);
+    if (!sessions.some(s => s.id === session.id)) { if (res.ok) await archiveNotion(res.ids, true); return; }
     const synced = await finishSync(session, res);
     persist(); renderHistory();
-    if (synced) showUndo('Workout saved', undoSave);
-    else toast('Notion: ' + res.error);
-  } else {
-    showUndo('Workout saved 💪', undoSave);
+    const syncMessage = synced ? 'Synced to Notion' : 'Saved on this device · Notion sync pending';
+    if (!$('workout-success').hidden && $('workout-success').dataset.sessionId === session.id) $('success-sync').textContent = syncMessage;
+    else if (!synced) toast(syncMessage);
   }
 });
 
@@ -1009,7 +1250,7 @@ $('save-btn').addEventListener('click', async ()=>{
 function exportData() {
   return JSON.stringify({
     app: 'rep-log', version: 2, exportedAt: new Date().toISOString(),
-    sessions, customExercises, customTags, templates, cardioNames, hiddenExercises
+    sessions, customExercises, customTags, templates, cardioNames, hiddenExercises, weeklyTarget
   }, null, 2);
 }
 function closeModal(id) { $(id).classList.remove('open'); }
@@ -1082,6 +1323,7 @@ $('import-do').addEventListener('click', () => {
     localStorage.setItem(CARDIO_KEY, JSON.stringify(cardioNames));
     localStorage.setItem(HIDDEN_KEY, JSON.stringify(hiddenExercises));
     localStorage.setItem(TPL_KEY, JSON.stringify(templates));
+    if (validWeeklyTarget(data.weeklyTarget)) { localStorage.setItem(WEEKLY_TARGET_KEY, String(data.weeklyTarget)); weeklyTarget = data.weeklyTarget; }
   } catch (e) { toast('Storage full — backup import may be incomplete'); }
   persist();
   monthsSeeded = false;
@@ -1423,19 +1665,22 @@ function paceLabel(p) {
 // Build chart-ready series (chartSVG expects {label, top})
 function cardioSeries(rows, field) { return rows.filter(r => r[field] != null).map(r => ({ key: r.key, label: r.label, top: r[field] })); }
 function renderCardioStatsUnused() {} // removed: cardio now folded into the exercise view
-let statMode = 'exercise';
+let statMode = 'attendance';
 function setStatMode(mode) {
   statMode = mode;
-  document.querySelectorAll('.stat-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  document.querySelectorAll('.stat-mode-btn').forEach(b => { b.classList.toggle('active', b.dataset.mode === mode); b.setAttribute('aria-pressed', String(b.dataset.mode === mode)); });
+  $('stat-attendance-pane').style.display = mode === 'attendance' ? '' : 'none';
   $('stat-exercise-pane').style.display = mode === 'exercise' ? '' : 'none';
   $('stat-template-pane').style.display = mode === 'template' ? '' : 'none';
-  if (mode === 'exercise') { buildStatSelect(); renderStatChart(); }
+  if (mode === 'attendance') { attendanceMonth = null; renderAttendance(); }
+  else if (mode === 'exercise') { buildStatSelect(); renderStatChart(); }
   else { buildTplSelect(); renderTemplateStats(); }
 }
 document.querySelectorAll('.stat-mode-btn').forEach(b => b.addEventListener('click', () => setStatMode(b.dataset.mode)));
 
 let statsOpen = false;
 function setView(stats) {
+  dismissWorkoutSuccess();
   statsOpen = stats;
   $('log-view').style.display = stats ? 'none' : '';
   $('stats-view').style.display = stats ? '' : 'none';
@@ -1487,7 +1732,7 @@ function migrateExerciseCasing() {
 /* ---------- Init ---------- */
 (function init(){
   $('session-date').value = localToday();
-  loadSessions(); loadExercises(); loadTags(); loadTemplates(); loadCardio(); loadHidden(); loadDbId();
+  loadSessions(); loadExercises(); loadTags(); loadTemplates(); loadCardio(); loadHidden(); loadDbId(); loadWeeklyTarget();
   migrateExerciseCasing();
   loadDraft();   // bring back any unsaved in-progress workout
   // If we were mid-edit of an existing workout, restore that mode's UI.
