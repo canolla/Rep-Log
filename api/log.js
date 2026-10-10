@@ -107,11 +107,60 @@ export default async function handler(req, res) {
   // The database is provided by the app — each person sets their own. No default.
   const DB = databaseId && String(databaseId).trim();
   if (!DB) {
-    res.status(400).json({ error: 'No Notion database set. Open the app, tap Notion sync, and add your database ID.' });
+    res.status(400).json({ error: 'No Notion database set. Open Notion settings and add your database ID.' });
     return;
   }
 
   const num = v => Number(v) || 0;
+  // Reuse a complete upload when a prior request reached Notion but its response
+  // was lost. Keep older revisions for the client to archive after the new rows
+  // are safely present.
+  const expected = exercises.flatMap(ex => (Array.isArray(ex.sets) ? ex.sets : []).map((set, index) => ({
+    date, exercise: ex.name || 'Exercise', setNo: index + 1, tag: tag && String(tag).trim() || '',
+    cardio: ex.type === 'cardio', weight: num(set.weight), reps: num(set.reps),
+    mins: num(set.mins), km: num(set.km)
+  })));
+  let existing = [];
+  if (sessionId) {
+    try {
+      let cursor;
+      do {
+        const query = { page_size: 100, sorts: [{ timestamp: 'created_time', direction: 'descending' }], filter: { property: 'Session', rich_text: { equals: String(sessionId) } } };
+        if (cursor) query.start_cursor = cursor;
+        const r = await fetch(`https://api.notion.com/v1/databases/${DB}/query`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${TOKEN}`, 'Notion-Version': '2022-06-28', 'Content-Type': 'application/json' },
+          body: JSON.stringify(query)
+        });
+        if (!r.ok) { res.status(502).json({ error: 'Notion session lookup failed', detail: await r.text() }); return; }
+        const data = await r.json();
+        existing.push(...(data.results || []));
+        cursor = data.has_more ? data.next_cursor : undefined;
+      } while (cursor);
+    } catch (e) { res.status(500).json({ error: 'Notion session lookup failed', detail: String(e) }); return; }
+  }
+  const sameRow = (page, row) => {
+    const p = page.properties || {};
+    const number = name => p[name]?.number;
+    const cardio = number('Duration (min)') != null || number('Distance (km)') != null;
+    return p['Date']?.date?.start === row.date &&
+      (p['Exercise']?.select?.name || '') === row.exercise &&
+      number('Set #') === row.setNo &&
+      (p['Workout Type']?.select?.name || '') === row.tag && cardio === row.cardio &&
+      num(number('Weight (kg)')) === row.weight && num(number('Reps')) === row.reps &&
+      num(number('Duration (min)')) === row.mins && num(number('Distance (km)')) === row.km;
+  };
+  const unused = [...existing], matching = [];
+  for (const row of expected) {
+    const match = unused.findIndex(page => sameRow(page, row));
+    if (match < 0) break;
+    matching.push(...unused.splice(match, 1));
+  }
+  if (matching.length === expected.length && expected.length) {
+    res.status(200).json({ ok: true, created: 0, ids: matching.map(page => page.id), priorIds: unused.map(page => page.id) });
+    return;
+  }
+  const priorIds = existing.map(page => page.id);
   let created = 0;
   const ids = [];
   // If Notion rejects a later set, attempt to remove rows created earlier
@@ -181,7 +230,7 @@ export default async function handler(req, res) {
       }
     }
 
-    res.status(200).json({ ok: true, created, ids });
+    res.status(200).json({ ok: true, created, ids, priorIds });
   } catch (e) {
     await rollbackCreatedRows();
     res.status(500).json({ error: 'Sync failed', detail: String(e) });

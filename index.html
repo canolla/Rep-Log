@@ -80,7 +80,7 @@
      <div class="sec-title">Training history</div>
     <div id="history"></div>
       <div class="data-actions">
-        <button class="btn-mini" id="settings-btn">Notion sync</button>
+        <button class="btn-mini" id="settings-btn">Notion settings</button>
         <button class="btn-mini" id="export-btn">Export data</button>
         <button class="btn-mini" id="import-btn">Import data</button>
       </div>
@@ -164,8 +164,8 @@
 </div>
 <div class="modal-overlay" id="settings-modal">
   <div class="modal">
-    <h3>Notion sync</h3>
-    <p>Workouts are saved on this device, and sync to Notion only after you add your database ID here. Paste your Notion database ID below and Save.</p>
+    <h3>Notion settings</h3>
+    <p>Enter your database ID once. Workouts then sync automatically and retry after a connection problem.</p>
     <label>Notion database ID</label>
     <input type="text" id="db-input" placeholder="e.g. 36ff66f7409e80229813eadcdfed3d3e" autocomplete="off">
     <div class="modal-row">
@@ -179,6 +179,7 @@
   </div>
 </div>
 <div class="toast" id="toast"></div>
+<div class="workout-success-backdrop" id="workout-success-backdrop" hidden aria-hidden="true"></div>
 <aside id="workout-success" class="workout-success" hidden aria-label="Workout saved">
   <div class="success-confetti" id="success-confetti" aria-hidden="true"></div>
   <div role="status" aria-live="polite" aria-atomic="true">
@@ -304,7 +305,12 @@ async function syncSession(session) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ date: session.date, exercises, tag: session.tag || undefined, sessionId: session.id, databaseId: notionDbId || undefined })
     });
-    if (r.ok) { let ids = []; try { const j = await r.json(); ids = j.ids || []; } catch (e) {} return { ok: true, ids }; }
+    if (r.ok) {
+      try {
+        const j = await r.json();
+        return { ok: true, ids: j.ids || [], priorIds: j.priorIds || [] };
+      } catch (e) { return { ok: false, error: 'Could not read Notion response; retrying automatically' }; }
+    }
     let msg = 'HTTP ' + r.status;
     try {
       const j = await r.json(); msg = j.error || msg;
@@ -315,7 +321,8 @@ async function syncSession(session) {
 }
 async function finishSync(session, result) {
   if (!result.ok) return false;
-  const previousIds = [...new Set([...(session.notionPageIds || []), ...(session.pendingArchiveIds || [])])];
+  const keep = new Set(result.ids);
+  const previousIds = [...new Set([...(session.notionPageIds || []), ...(session.pendingArchiveIds || []), ...(result.priorIds || [])])].filter(id => !keep.has(id));
   session.notionPageIds = result.ids;
   if (previousIds.length && !(await archiveNotion(previousIds, true))) {
     session.pendingArchiveIds = [...new Set([...(session.pendingArchiveIds || []), ...previousIds])];
@@ -326,6 +333,65 @@ async function finishSync(session, result) {
   session.synced = true;
   return true;
 }
+
+let pendingSyncTimer = null;
+let pendingSyncRunning = false;
+let pendingSyncRequested = false;
+function schedulePendingSync(delay = 0) {
+  if (!notionDbId || !sessions.some(session => !session.synced)) return;
+  if (pendingSyncRunning) { pendingSyncRequested = true; return; }
+  clearTimeout(pendingSyncTimer);
+  pendingSyncTimer = setTimeout(() => { pendingSyncTimer = null; void syncPendingWorkouts(); }, delay);
+}
+async function syncPendingWorkouts() {
+  if (pendingSyncRunning || !notionDbId) return;
+  pendingSyncRunning = true;
+  const databaseId = notionDbId;
+  let failed = false;
+  try {
+    // A single pass prevents duplicate uploads when several retry triggers fire together.
+    for (const session of sessions.filter(s => !s.synced)) {
+      if (!sessions.includes(session) || notionDbId !== databaseId) continue;
+      if (session.pendingArchiveIds?.length) {
+        // New rows were already created; only finish cleaning up old rows.
+        const ids = [...session.pendingArchiveIds];
+        const archived = await archiveNotion(ids, true);
+        if (!sessions.includes(session)) continue;
+        if (archived) {
+          session.pendingArchiveIds = session.pendingArchiveIds.filter(id => !ids.includes(id));
+          session.synced = !session.pendingArchiveIds.length && !session.syncAfterCleanup;
+          session.syncAfterCleanup = false;
+        } else failed = true;
+      } else {
+        const result = await syncSession(session);
+        // A deleted or newly edited workout must not acquire an obsolete sync result.
+        if (!sessions.includes(session) || notionDbId !== databaseId) {
+          if (result.ok) await archiveNotion(result.ids, true);
+          continue;
+        }
+        if (result.ok) {
+          const synced = await finishSync(session, result);
+          if (!sessions.includes(session)) {
+            await archiveNotion(result.ids, true);
+            continue;
+          }
+          if (!synced) failed = true;
+          else session.syncAfterCleanup = false;
+        } else failed = true;
+      }
+      persist(); renderHistory();
+      if (!$('workout-success').hidden && $('workout-success').dataset.sessionId === session.id) {
+        $('success-sync').textContent = session.synced ? 'Synced to Notion' : 'Saved on this device · Sync will retry automatically';
+      }
+    }
+  } finally {
+    pendingSyncRunning = false;
+    if (pendingSyncRequested) { pendingSyncRequested = false; schedulePendingSync(); }
+    else if (notionDbId && sessions.some(s => !s.synced)) schedulePendingSync(failed ? 60000 : 0);
+  }
+}
+window.addEventListener('online', () => schedulePendingSync());
+document.addEventListener('visibilitychange', () => { if (!document.hidden) schedulePendingSync(); });
 
 /* ---------- Helpers ---------- */
 function fmtDate(iso) {
@@ -602,6 +668,8 @@ function dismissWorkoutSuccess() {
   clearTimeout(workoutSuccessFadeTimer);
   $('workout-success').hidden = true;
   $('workout-success').classList.remove('fading');
+  $('workout-success-backdrop').hidden = true;
+  $('workout-success-backdrop').classList.remove('fading');
   $('success-confetti').replaceChildren();
 }
 function scheduleSuccessDismissal() {
@@ -609,6 +677,7 @@ function scheduleSuccessDismissal() {
   clearTimeout(workoutSuccessFadeTimer);
   if (!$('workout-success').hidden) workoutSuccessTimer = setTimeout(() => {
     $('workout-success').classList.add('fading');
+    $('workout-success-backdrop').classList.add('fading');
     workoutSuccessFadeTimer = setTimeout(dismissWorkoutSuccess, 350);
   }, 4000);
 }
@@ -648,6 +717,7 @@ function showWorkoutSuccess(session) {
   renderGoalDots($('success-dots'), count, weeklyTarget, true);
   $('success-confetti').replaceChildren();
   $('toast').classList.remove('show');
+  $('workout-success-backdrop').hidden = false;
   panel.hidden = false;
   if (count === weeklyTarget) celebrateGoal();
   scheduleSuccessDismissal();
@@ -834,9 +904,9 @@ function buildSessionEl(s) {
   const el = document.createElement('div'); el.className = 'session';
   const exCount = s.exercises.length;
   const setCount = s.exercises.reduce((t, e) => t + e.sets.length, 0);
-  const badge = s.synced
+  const badge = !notionDbId ? '' : s.synced
     ? `<span class="sync-badge sync-ok" title="Synced to Notion"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Synced</span>`
-    : `<span class="sync-badge sync-pending" data-sync="${escapeHtml(s.id)}">Sync</span>`;
+    : `<span class="sync-badge sync-pending" title="Will retry syncing automatically">Pending</span>`;
   el.innerHTML = `
     <div class="session-head" role="button" tabindex="0" aria-expanded="false" aria-label="Workout on ${escapeHtml(fmtDate(s.date))}">
       <div>
@@ -862,7 +932,7 @@ function buildSessionEl(s) {
     </div>`;
   const head = el.querySelector('.session-head');
   head.addEventListener('click', e => {
-    if (e.target.closest('[data-del-session]') || e.target.closest('[data-sync]') || e.target.closest('[data-edit-session]')) return;
+    if (e.target.closest('[data-del-session]') || e.target.closest('[data-edit-session]')) return;
     el.classList.toggle('open');
     head.setAttribute('aria-expanded', String(el.classList.contains('open')));
   });
@@ -889,23 +959,6 @@ function buildSessionEl(s) {
       archiveNotion(archivedIds, false);
       toast('Workout restored');
     });
-  });
-  const syncBtn = el.querySelector('[data-sync]');
-  if (syncBtn) syncBtn.addEventListener('click', async e => {
-    e.stopPropagation();
-    if (!notionDbId) { $('db-input').value = notionDbId; $('settings-modal').classList.add('open'); toast('Add your Notion database ID to sync'); return; }
-    syncBtn.textContent = '\u2026';
-    if (s.pendingArchiveIds && s.pendingArchiveIds.length) {
-      const done = await archiveNotion(s.pendingArchiveIds, true);
-      if (done) { s.pendingArchiveIds = []; s.synced = true; }
-      persist(); renderHistory();
-      toast(done ? 'Notion cleanup complete' : 'Could not remove previous Notion rows');
-      return;
-    }
-    const res = await syncSession(s);
-    const synced = await finishSync(s, res);
-    persist(); renderHistory();
-    toast(synced ? 'Synced to Notion ✓' : res.ok ? 'New rows saved; tap Sync to finish cleanup' : ('Notion: ' + res.error));
   });
   const editBtn = el.querySelector('[data-edit-session]');
   if (editBtn) editBtn.addEventListener('click', e => { e.stopPropagation(); editSession(s); });
@@ -1213,16 +1266,12 @@ $('save-btn').addEventListener('click', async ()=>{
     const old = sessions[idx];
     // In edit mode the typed names are authoritative — no canonical snapping,
     // so a casing/spelling fix sticks instead of reverting to an old spelling.
-    const updated = { ...old, date: $('session-date').value, exercises: cleaned, tag: draftTag || undefined, synced: false };
+    const updated = { ...old, date: $('session-date').value, exercises: cleaned, tag: draftTag || undefined, synced: false,
+      syncAfterCleanup: Boolean(old.pendingArchiveIds?.length) };
     sessions[idx] = updated;
     if (!persist()) { sessions[idx] = old; return; }
     dismissWorkoutSuccess(); renderHistory(); exitEdit(); toast('Workout updated');
-    if (notionDbId) {
-      const res = await syncSession(updated);
-      const synced = await finishSync(updated, res);
-      persist(); renderHistory();
-      toast(synced ? 'Updated in Notion \u2713' : res.ok ? 'New rows saved; tap Sync to finish cleanup' : ('Notion: ' + res.error));
-    }
+    schedulePendingSync();
     return;
   }
 
@@ -1235,15 +1284,7 @@ $('save-btn').addEventListener('click', async ()=>{
 
   showWorkoutSuccess(session);
 
-  if (notionDbId) {
-    const res = await syncSession(session);
-    if (!sessions.some(s => s.id === session.id)) { if (res.ok) await archiveNotion(res.ids, true); return; }
-    const synced = await finishSync(session, res);
-    persist(); renderHistory();
-    const syncMessage = synced ? 'Synced to Notion' : 'Saved on this device · Notion sync pending';
-    if (!$('workout-success').hidden && $('workout-success').dataset.sessionId === session.id) $('success-sync').textContent = syncMessage;
-    else if (!synced) toast(syncMessage);
-  }
+  schedulePendingSync();
 });
 
 /* ---------- Export / Import ---------- */
@@ -1328,6 +1369,7 @@ $('import-do').addEventListener('click', () => {
   persist();
   monthsSeeded = false;
   renderDraft(); renderTags(); renderHistory();
+  schedulePendingSync();
   closeModal('import-modal');
   toast(added ? ('Imported ' + added + ' workout' + (added !== 1 ? 's' : '')) : 'Already up to date');
 });
@@ -1340,10 +1382,17 @@ function loadDbId() { try { notionDbId = localStorage.getItem(DB_KEY) || ''; } c
 $('settings-btn').addEventListener('click', () => { $('db-input').value = notionDbId; $('settings-modal').classList.add('open'); });
 $('settings-close').addEventListener('click', () => closeModal('settings-modal'));
 $('settings-save').addEventListener('click', () => {
-  notionDbId = $('db-input').value.trim();
+  const nextDatabaseId = $('db-input').value.trim();
+  if (nextDatabaseId && notionDbId && nextDatabaseId !== notionDbId) {
+    // The remote page IDs belong to the previous database.
+    sessions.forEach(s => { s.synced = false; s.notionPageIds = []; s.pendingArchiveIds = []; });
+    persist();
+  }
+  notionDbId = nextDatabaseId;
   try { localStorage.setItem(DB_KEY, notionDbId); } catch (e) {}
   closeModal('settings-modal');
-  toast(notionDbId ? 'Saved — syncing to your database' : 'Saved — sync is off until you add an ID');
+  renderHistory(); schedulePendingSync();
+  toast(notionDbId ? 'Notion connected · Workouts sync automatically' : 'Saved · Workouts stay on this device');
 });
 $('settings-modal').addEventListener('click', e => { if (e.target.id === 'settings-modal') closeModal('settings-modal'); });
 
@@ -1391,6 +1440,7 @@ async function fetchFromNotion() {
     incoming.forEach(s => s.exercises.forEach(ex => { if (ex.name && !have.has(ex.name.toLowerCase())) { customExercises.push(ex.name); have.add(ex.name.toLowerCase()); } }));
     try { localStorage.setItem(EX_KEY, JSON.stringify(customExercises)); } catch (e) {}
     persist(); monthsSeeded = false; renderHistory();
+    schedulePendingSync();
     closeModal('settings-modal');
     toast(added ? ('Pulled ' + added + ' workout' + (added !== 1 ? 's' : '') + ' from Notion') : 'Already up to date');
   } catch (e) {
@@ -1742,6 +1792,7 @@ function migrateExerciseCasing() {
     $('cancel-edit-btn').style.display = '';
   }
   renderDraft(); renderTags(); renderHistory();
+  schedulePendingSync();
   if (draftExercises.length) toast('Picked up where you left off');
 
   const tagRow = document.getElementById('tag-row');
